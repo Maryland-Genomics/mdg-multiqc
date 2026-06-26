@@ -54,6 +54,21 @@ http://multiqc.info
       </div>
       <div class="toast-body"></div>
     </div>
+    <script>
+      document.querySelectorAll(".mqc-nav > li").forEach(li => {
+          const sub = li.querySelector("ul");
+          if (!sub) return;
+
+          const a = li.querySelector(":scope > a");
+          sub.style.display = "none";
+
+          a.addEventListener("click", e => {
+              e.preventDefault();
+              sub.style.display =
+                  sub.style.display === "none" ? "block" : "none";
+          });
+      });
+</script>
 
     {% include 'foot.html' %}
   </body>
