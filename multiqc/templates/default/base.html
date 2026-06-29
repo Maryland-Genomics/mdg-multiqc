@@ -29,7 +29,7 @@ http://multiqc.info
   </head>
   <body>
     {% include 'nav.html' %}
-    {% include 'toolbox.html' %}
+    
 
     <div class="mainpage">
       <div class="p-4 pe-5">
@@ -37,9 +37,7 @@ http://multiqc.info
         {% include 'general_stats.html' %}
         {% include 'content.html' %}
       </div>
-      <div class="footer border-top py-3 mt-5">
-        <div class="container-fluid">{% include 'footer.html' %}</div>
-      </div>
+      
     </div>
 
     <!-- Bootstrap Toast Container -->
@@ -55,19 +53,19 @@ http://multiqc.info
       <div class="toast-body"></div>
     </div>
     <script>
-      document.querySelectorAll(".mqc-nav > li").forEach(li => {
-          const sub = li.querySelector("ul");
-          if (!sub) return;
+    document.querySelectorAll(".mqc-nav > li").forEach(li => {
+        const sub = li.querySelector("ul");
+        if (!sub) return;
 
-          const a = li.querySelector(":scope > a");
-          sub.style.display = "none";
+        const a = li.querySelector(":scope > a");
+        sub.style.display = "none";
 
-          a.addEventListener("click", e => {
-              e.preventDefault();
-              sub.style.display =
-                  sub.style.display === "none" ? "block" : "none";
-          });
-      });
+        a.addEventListener("click", e => {
+            e.preventDefault();
+            sub.style.display =
+                sub.style.display === "none" ? "block" : "none";
+        });
+    });
 </script>
 
     {% include 'foot.html' %}
