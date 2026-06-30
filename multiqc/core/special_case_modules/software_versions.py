@@ -47,7 +47,7 @@ class MultiqcModule(BaseMultiqcModule):
         ignore_groups = groups_rows == software_rows
 
         # Based on: https://github.com/nf-core/rnaseq/blob/3bec2331cac2b5ff88a1dc71a21fab6529b57a0f/modules/nf-core/custom/dumpsoftwareversions/templates/dumpsoftwareversions.py#L12
-        header_rows = ["<th>Software</th>", "<th>Version</th>"]
+        header_rows = ["<th>Software</th>", "<th>Version</th>", "<th>Citation<th>"]
         if not ignore_groups:
             header_rows.insert(0, f"<th>{config.versions_table_group_header}</th>")
         html = [
@@ -71,6 +71,18 @@ class MultiqcModule(BaseMultiqcModule):
                     f"<td>{tool}</td>",
                     f"<td><samp>{', '.join(list(map(str, tool_versions)))}</samp></td>",
                 ]
+
+                cite_pattern = "/cite"
+                if (cite_pattern in rows[1]):
+                    print("hit")
+                    temp = rows[1]
+                    cite_index = temp.find(cite_pattern)
+                    samp_index = temp.find("</samp>")
+                    rows.append("<td>" + temp[cite_index + len(cite_pattern):samp_index] + "</td>")
+                    rows[1] = temp[:cite_index] + "</td>"
+                else:
+                    rows.append("<td></td>")
+
                 if not ignore_groups:
                     rows.insert(0, f"<td>{group if (i == 0) else ''}</td>")
                 html.append(f"<tr>{''.join(rows)}</tr>")
