@@ -565,6 +565,10 @@ def color_to_rgb_string(color: Optional[str]) -> str:
     # Color is already in rgb format - extract the values
     if color.startswith("rgb"):
         return color
+    # Color in rbg format but doesn't start with "rgb"
+    elif (color.count(',') == 2):
+        rgb_color = f"rgb({color})"
+        return rgb_color
     # Convert other formats to RGB using spectra
     else:
         try:

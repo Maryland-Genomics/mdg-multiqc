@@ -74,7 +74,6 @@ class MultiqcModule(BaseMultiqcModule):
 
                 cite_pattern = "/cite"
                 if (cite_pattern in rows[1]):
-                    print("hit")
                     temp = rows[1]
                     cite_index = temp.find(cite_pattern)
                     samp_index = temp.find("</samp>")
