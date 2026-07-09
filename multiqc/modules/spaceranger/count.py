@@ -53,7 +53,11 @@ def parse_count_html(module: BaseMultiqcModule):
             if line.startswith("const data"):
                 line = line.replace("const data = ", "")
                 summary = json.loads(line)
-                summary = summary["summary"]
+                # json_out = json.dumps(summary)
+                # with open("test.json", "w") as f:
+                #    f.write(json_out)
+                #print(summary)
+                #summary = summary["summary"]
                 break
 
         if summary is None:
@@ -64,10 +68,15 @@ def parse_count_html(module: BaseMultiqcModule):
         if sample_name in general_stats_data:
             log.debug(f"Duplicate sample name found in {f['fn']}! Overwriting: {sample_name}")
 
-        software = next(
-            iter(x[1] for x in summary["summary_tab"]["pipeline_info_table"]["rows"] if x[0] == "Pipeline Version")
-        )
-        software_name, software_version = software.split("-")
+        #software = next(
+        #    iter(x[1] for x in summary["summary_tab"]["pipeline_info_table"]["rows"] if x[0] == "Pipeline Version")
+        #)
+
+        software = summary["tabs"]["tab_data"][0]["run_summary"]["card"]["inner"]["rows"][7]
+
+        #software_name, software_version = software.split("-")
+        software_name = "Space Ranger"
+        software_version = software[1]
         module.add_software_version(version=software_version, sample=sample_name, software_name=software_name)
 
         # List of data collated from different tables in cellranger reports.

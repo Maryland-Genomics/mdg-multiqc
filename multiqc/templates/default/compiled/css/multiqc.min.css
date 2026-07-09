@@ -4913,13 +4913,13 @@ fieldset:disabled .btn {
     --bs-card-cap-bg: rgba(var(--bs-body-color-rgb), .03);
     --bs-card-cap-color: ;
     --bs-card-height: ;
-    --bs-card-color: ;
+    /*--bs-card-color: rgba(var(--bs-blue));*/
     --bs-card-bg: var(--bs-body-bg);
     --bs-card-img-overlay-padding: 1rem;
     --bs-card-group-margin: .75rem;
     min-width: 0;
     height: var(--bs-card-height);
-    /*color: var(--bs-body-color);*/
+    color: var(--bs-body-color);
     word-wrap: break-word;
     background-color: var(--bs-card-bg);
     border: var(--bs-card-border-width) solid var(--bs-card-border-color);
