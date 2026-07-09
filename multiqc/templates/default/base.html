@@ -71,17 +71,40 @@ http://multiqc.info
     });
   </script>
   <script>
-    const megablast_table = document.getElementById("megablast_qc-plot_table").getElementsByTagName("tbody")[0];
-    console.log("hit 1" + megablast_table)
-    Array.from(megablast_table.getElementsByTagName("tr")).forEach(tr => {
-      console.log("hit 2")
+    // Hidden Top 50 hits for MDG Megablast Table
+    
+    const megaBlastTable = document.getElementById("megablast_qc-plot_table").getElementsByTagName("tbody")[0];
+    var topHitsTables = Array.from(document.querySelectorAll(`[id^=${"mqc-section-wrapper-top_hits_"}]`))
+    
+    // Hide all tophits nav bar boxes
+    Array.from(document.getElementsByClassName("mqc-nav")[0].getElementsByTagName("li")).forEach(x => {
+        if (Array.from(x.getElementsByTagName("a"))[0].textContent.includes("Top Hits")) {
+            x.style.display = "none"
+        }
+    })
+
+    // Hide all tophits tables
+    topHitsTables.forEach(x => {
+      x.style.display = "none"
+    })
+
+    Array.from(megaBlastTable.getElementsByTagName("tr")).forEach((tr, index) => {
       tr.addEventListener("click", () => {
-        console.log("hit 3")
+        // Show or hide corresponding top hits table based on it's current state
+        console.log(topHitsTables[index].style.display)
+        if (topHitsTables[index].style.display == "none") {
+            topHitsTables[index].style.display = "block"
+        }
+        else {
+            topHitsTables[index].style.display = "none"
+        }
       })
       tr.addEventListener("mouseenter", () => {
+        // Display pointer cursor when hovering over megablast table
         tr.style.cursor = "pointer"
       })
       tr.addEventListener("mouseleave", () => {
+        // Switch to default cursor when moving off megablast table
         tr.style.cursor = "default"
       })
     })
