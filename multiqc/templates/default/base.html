@@ -78,7 +78,7 @@ http://multiqc.info
     
     // Hide all tophits nav bar boxes
     Array.from(document.getElementsByClassName("mqc-nav")[0].getElementsByTagName("li")).forEach(x => {
-        if (Array.from(x.getElementsByTagName("a"))[0].textContent.includes("Top Hits")) {
+        if (Array.from(x.getElementsByTagName("a"))[0].getAttribute("href").startsWith("#top_hits_")) {
             x.style.display = "none"
         }
     })
@@ -91,7 +91,6 @@ http://multiqc.info
     Array.from(megaBlastTable.getElementsByTagName("tr")).forEach((tr, index) => {
       tr.addEventListener("click", () => {
         // Show or hide corresponding top hits table based on it's current state
-        console.log(topHitsTables[index].style.display)
         if (topHitsTables[index].style.display == "none") {
             topHitsTables[index].style.display = "block"
         }
@@ -109,7 +108,38 @@ http://multiqc.info
       })
     })
   </script>
+  <script>
+    //Collapsible sections
+    
+    moduleSections = Array.from(document.getElementsByClassName("mqc-module-section")) //every module section
 
+    moduleSections.forEach(x => {
+      header = Array.from(x.getElementsByTagName("h2"))[0] //event when click on title
+      header.addEventListener("click", () => {
+        if (x.getAttribute("id").includes("general_stats")) { //special case for general stats table
+          genStatsTable = x.querySelector("[id=mqc_violintable_wrapper_general_stats_table_table]")
+          if (genStatsTable.style.display == "none") {
+            genStatsTable.style.display = "block"
+          }
+          else {
+            genStatsTable.style.display = "none"
+          }
+        }
+        mqcSections = Array.from(x.querySelectorAll("[class^=mqc-section ]"))
+        mqcSections.forEach(y => {
+            if (y.style.display == "none") {
+                y.style.display = "block"
+                if (y.hasAttribute("id") && y.getAttribute("id").includes("top_hits")) {
+                    y.style.display = "none"
+                } 
+            }
+            else {
+                y.style.display = "none"
+            }
+        })
+      })
+    })
+  </script>
   {% include 'foot.html' %}
 </body>
 
