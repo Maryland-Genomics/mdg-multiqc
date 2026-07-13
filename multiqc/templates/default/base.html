@@ -137,6 +137,14 @@ http://multiqc.info
             }
         })
       })
+      header.addEventListener("mouseenter", () => {
+        // Display pointer cursor when hovering over header
+        document.body.style.cursor = "pointer"
+      })
+      header.addEventListener("mouseleave", () => {
+        // Switch to default cursor when moving off header
+        document.body.style.cursor = "default"
+      })
     })
   </script>
   {% include 'foot.html' %}
