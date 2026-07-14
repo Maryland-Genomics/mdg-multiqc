@@ -58,28 +58,36 @@ http://multiqc.info
   <script>
     document.querySelectorAll(".mqc-nav > li").forEach(li => {
       const sub = li.querySelector("ul");
-      if (!sub) return;
 
       const a = li.querySelector(":scope > a");
-      sub.style.display = "none";
+      if (sub) { sub.style.display = "none"; }
 
       a.addEventListener("click", e => {
-        sub.style.display =
-          sub.style.display === "none" ? "block" : "none";
+        document.querySelectorAll(".mqc-nav > li").forEach(li => {
+          const sub = li.querySelector("ul");
+          if (!sub) return;
+
+          const a = li.querySelector(":scope > a");
+          sub.style.display = "none";
+        });
+        if (sub) {
+          sub.style.display =
+            sub.style.display === "none" ? "block" : "none";
+        }
       });
     });
   </script>
   <script>
     // Hidden Top 50 hits for MDG Megablast Table
-    
-    const megaBlastTable = document.getElementById("megablast_qc-plot_table").getElementsByTagName("tbody")[0];
+
+    var megaBlastTable = document.getElementById("megablast_qc-plot_table").getElementsByTagName("tbody")[0];
     var topHitsTables = Array.from(document.querySelectorAll(`[id^=${"mqc-section-wrapper-top_hits_"}]`))
-    
+
     // Hide all tophits nav bar boxes
     Array.from(document.getElementsByClassName("mqc-nav")[0].getElementsByTagName("li")).forEach(x => {
-        if (Array.from(x.getElementsByTagName("a"))[0].getAttribute("href").startsWith("#top_hits_")) {
-            x.style.display = "none"
-        }
+      if (Array.from(x.getElementsByTagName("a"))[0].getAttribute("href").startsWith("#top_hits_")) {
+        x.style.display = "none"
+      }
     })
 
     // Hide all tophits tables
@@ -91,10 +99,10 @@ http://multiqc.info
       tr.addEventListener("click", () => {
         // Show or hide corresponding top hits table based on it's current state
         if (topHitsTables[index].style.display == "none") {
-            topHitsTables[index].style.display = "block"
+          topHitsTables[index].style.display = "block"
         }
         else {
-            topHitsTables[index].style.display = "none"
+          topHitsTables[index].style.display = "none"
         }
       })
       tr.addEventListener("mouseenter", () => {
@@ -109,7 +117,7 @@ http://multiqc.info
   </script>
   <script>
     //Collapsible sections
-    
+
     moduleSections = Array.from(document.getElementsByClassName("mqc-module-section")) //every module section
 
     moduleSections.forEach(x => {
@@ -126,15 +134,15 @@ http://multiqc.info
         }
         mqcSections = Array.from(x.querySelectorAll("[class^=mqc-section ]"))
         mqcSections.forEach(y => {
-            if (y.style.display == "none") {
-                y.style.display = "block"
-                if (y.hasAttribute("id") && y.getAttribute("id").includes("top_hits")) {
-                    y.style.display = "none"
-                } 
+          if (y.style.display == "none") {
+            y.style.display = "block"
+            if (y.hasAttribute("id") && y.getAttribute("id").includes("top_hits")) {
+              y.style.display = "none"
             }
-            else {
-                y.style.display = "none"
-            }
+          }
+          else {
+            y.style.display = "none"
+          }
         })
       })
       header.addEventListener("mouseenter", () => {
