@@ -13999,3 +13999,16 @@ g.annotation {
     --bs-btn-disabled-color: #6c757d;
     --bs-btn-disabled-border-color: #6c757d
 }
+
+.btn-collapse-sections {
+    box-sizing: content-box;
+    width: 100px;
+    height: 40px;
+    color: var(--bs-body-color);
+    background-color: var(--bs-secondary-bg);
+    filter: var(--bs-btn-close-filter);
+    opacity: var(--bs-btn-close-opacity);
+    border: 0;
+    border-radius: .375rem;
+    padding: .25em
+}

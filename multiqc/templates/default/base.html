@@ -119,6 +119,8 @@ http://multiqc.info
     //Collapsible sections
 
     moduleSections = Array.from(document.getElementsByClassName("mqc-module-section")) //every module section
+    collapseButton = document.getElementById("collapse_sections")
+    collapsed = false
 
     moduleSections.forEach(x => {
       header = Array.from(x.getElementsByTagName("h2"))[0] //event when click on title
@@ -152,6 +154,36 @@ http://multiqc.info
       header.addEventListener("mouseleave", () => {
         // Switch to default cursor when moving off header
         document.body.style.cursor = "default"
+      })
+    })
+
+    // Collapse all sections button
+    collapseButton.addEventListener("click", () => {
+        collapsed = !collapsed
+        displayState = ""
+        if (collapsed) {
+        displayState = "none"
+        collapseButton.innerHTML = "Expand All Sections"
+      }
+      else {
+        displayState = "block"
+        collapseButton.innerHTML = "Collapse All Sections"
+      }
+
+      moduleSections.forEach(x => {
+        header = Array.from(x.getElementsByTagName("h2"))[0] //event when click on title
+
+        if (x.getAttribute("id").includes("general_stats")) { //special case for general stats table
+          genStatsTable = x.querySelector("[id=mqc_violintable_wrapper_general_stats_table_table]")
+          genStatsTable.style.display = displayState
+        }
+        mqcSections = Array.from(x.querySelectorAll("[class^=mqc-section ]"))
+        mqcSections.forEach(y => {
+          y.style.display = displayState
+          if (y.hasAttribute("id") && y.getAttribute("id").includes("top_hits")) {
+            y.style.display = "none"
+          }
+        })
       })
     })
   </script>

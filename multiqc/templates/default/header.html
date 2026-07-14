@@ -41,6 +41,10 @@ was generated and the button that launches the welcome tour.
   </h1>
 {% endif %}
 
+<div>
+    <button id="collapse_sections" class="btn-collapse-sections" type="button">Collapse All Sections</button>
+</div>
+
 {% if config.intro_text != False %}
   <p class="lead">
     {{ config.intro_text if config.intro_text is not none else 'A modular tool to aggregate results from bioinformatics analyses across many samples into a single report.' }}
