@@ -30,9 +30,12 @@ was generated and the button that launches the welcome tour.
     </div>
   {% endif %}
   <a href="https://marylandgenomics.org/" target="_blank">
-    <div class="multiqc-logo-wrapper">{{ include_file('assets/img/logos_no_bg/md-genomics-horizontal.svg') }}</div>
+    <div class="multiqc-logo-wrapper">{{ include_file('assets/img/igs-som-logo-dark.svg') }}</div>
   </a>
 </h1>
+
+<div class="swoop_banner">{{ include_file('assets/img/md-swoop.svg') }}</div>
+
 {% if config.title is not none or config.subtitle is not none %}
   <h1>
     {{ config.title if config.title is not none }}

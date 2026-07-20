@@ -56,23 +56,94 @@ http://multiqc.info
     <div class="toast-body"></div>
   </div>
   <script>
+    // Move MDG Analysis section above cell ranger
+    // Navbar
+    nav = document.getElementsByClassName("mqc-nav")[0]
+    analysisSection = null
+    cellRanger = null
+    nav.querySelectorAll("li").forEach(li => { //Find the MDG Analysis section and Cell Ranger module
+        if (li.querySelector("a").textContent.includes("MDG Analysis"))
+            analysisSection = li
+        if (li.querySelector("a").textContent.includes("Cell Ranger"))
+            cellRanger = li
+    })
+    nav.insertBefore(analysisSection, cellRanger)
+    
+    processingArray = []
+    analysisArray = []
+
+    // Get all MDG Processing and Analysis modules
     document.querySelectorAll(".mqc-nav > li").forEach(li => {
-      const sub = li.querySelector("ul");
+      const asub = li.querySelector("a")
+      if (asub.textContent.includes("bcl2fastq") || asub.textContent.includes("FastQC") ||
+       asub.textContent.includes("Cutadapt") || asub.textContent.includes("Trimmomatic")) {
+        asub.textContent = "⠀⠀"  + asub.textContent // Add an indent
+        processingArray.push(li) // fill out MDG Processing array
+        li.style.display = "none" // default to hiding
+      }
+      else if (asub.textContent.includes("Cell Ranger") || asub.textContent.includes("Space Ranger")) {
+        asub.textContent = "⠀⠀"  + asub.textContent
+        analysisArray.push(li)
+        li.style.display = "none"
+      }
+    })
+
+    document.querySelectorAll(".mqc-nav > li").forEach(li => { // Get all children of navbar
+      const sub = li.querySelector("ul"); // Get the list elements of each child
 
       const a = li.querySelector(":scope > a");
       if (sub) { sub.style.display = "none"; }
 
       a.addEventListener("click", e => {
-        document.querySelectorAll(".mqc-nav > li").forEach(li => {
-          const sub = li.querySelector("ul");
-          if (!sub) return;
+        alternateSubModules()
+        document.querySelectorAll(".mqc-nav > li").forEach(li1 => {
+          const sub1 = li1.querySelector("ul");
+          if (!sub1) return; // nothing to do if no children
 
-          const a = li.querySelector(":scope > a");
-          sub.style.display = "none";
+          if (li !== li1) { // close all sections that aren't this one
+            if (!(li1.querySelector("a").textContent.includes("MDG Processing") && processingArray.includes(li))
+                && !(li1.querySelector("a").textContent.includes("MDG Analysis") && analysisArray.includes(li))) {
+                // Don't close parent sections if opening child sections
+                sub1.style.display = "none";
+            }
+            if (li1.querySelector("a").textContent.includes("MDG Processing") && !processingArray.includes(li)) { // Hide submodules of previous section
+                processingArray.forEach(li2 => {
+                    li2.style.display = "none"
+                })
+            }
+            if (li1.querySelector("a").textContent.includes("MDG Analysis") && !analysisArray.includes(li)) {
+                analysisArray.forEach(li2 => {
+                    li2.style.display = "none"
+                })
+            }
+          }
         });
-        if (sub) {
+        if (sub) { // Hide or show children of each section based on current display status
           sub.style.display =
             sub.style.display === "none" ? "block" : "none";
+        }
+
+        function alternateSubModules() {
+            if (li.querySelector("a").textContent.includes("MDG Processing")) { // Hide or show submodules
+                processingArray.forEach(li2 => {
+                    if (li2.style.display == "none") {
+                    li2.style.display = "block"
+                    }
+                    else {
+                    li2.style.display = "none"
+                    }
+                })
+                }
+                if (li.querySelector("a").textContent.includes("MDG Analysis")) {
+                analysisArray.forEach(li2 => {
+                    if (li2.style.display == "none") {
+                    li2.style.display = "block"
+                    }
+                    else {
+                    li2.style.display = "none"
+                    }
+                })
+            }
         }
       });
     });
@@ -116,9 +187,34 @@ http://multiqc.info
     })
   </script>
   <script>
-    //Collapsible sections
+    // Reorder report content
+    content = document.getElementsByClassName("mqc-module-section")
+    parent = document.getElementsByClassName("p-4 pe-5")[0]
+    Array.from(content).forEach(div => { //Find the MDG Analysis section and Cell Ranger module
+        if (div.getAttribute("id").includes("mdg_analysis"))
+            analysisSection = div
+        if (div.getAttribute("id").includes("cellranger"))
+            cellRanger = div
+    })
+    parent.insertBefore(analysisSection, cellRanger)
 
+
+    // Collapsible sections
     moduleSections = Array.from(document.getElementsByClassName("mqc-module-section")) //every module section
+
+    processingSections = []
+    analysisSections = []
+
+    moduleSections.forEach(div => {
+      if (div.getAttribute("id").includes("bcl2fastq") || div.getAttribute("id").includes("fastqc") || 
+          div.getAttribute("id").includes("cutadapt") || div.getAttribute("id").includes("trimmomatic")) {
+        processingSections.push(div)
+      }
+      if (div.getAttribute("id").includes("cellranger") || div.getAttribute("id").includes("spaceranger")) {
+        analysisSections.push(div)
+      }
+    })
+
     collapseButton = document.getElementById("collapse_sections")
     collapsed = false
 
@@ -146,6 +242,34 @@ http://multiqc.info
             y.style.display = "none"
           }
         })
+        if (x.getAttribute("id").includes("mdg_processing")) {
+          if (showProcess == false) {
+            showProcess = true
+            processingSections.forEach(z => {
+                z.style.display = "block"
+            })
+          }
+          else {
+            showProcess = false
+            processingSections.forEach(z => {
+                z.style.display = "none"
+            })
+          }
+        }
+        if (x.getAttribute("id").includes("mdg_analysis")) {
+          if (showAnalysis == false) {
+            showAnalysis = true
+            analysisSections.forEach(z => {
+                z.style.display = "block"
+            })
+          }
+          else {
+            showAnalysis = false
+            analysisSections.forEach(z => {
+                z.style.display = "none"
+            })
+          }
+        }
       })
       header.addEventListener("mouseenter", () => {
         // Display pointer cursor when hovering over header
@@ -184,7 +308,12 @@ http://multiqc.info
             y.style.display = "none"
           }
         })
+        if (processingSections.includes(x) || analysisSections.includes(x)) {
+            x.style.display = displayState
+        }
       })
+      showProcess = !collapsed
+      showAnalysis = !collapsed
     })
   </script>
   {% include 'foot.html' %}
