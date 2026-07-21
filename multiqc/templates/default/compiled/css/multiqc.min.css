@@ -68,7 +68,7 @@
     --bs-font-sans-serif: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
     --bs-font-monospace: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     --bs-gradient: linear-gradient(180deg, #ffffff26, #fff0);
-    --bs-body-font-family: var(--bs-font-sans-serif);
+    --bs-body-font-family: "GothamPro", sans-serif;
     --bs-body-font-size: .85rem;
     --bs-body-font-weight: 400;
     --bs-body-line-height: 1.5;
@@ -88,6 +88,7 @@
     --bs-tertiary-bg-rgb: 248, 249, 250;
     --bs-heading-color: inherit;
     --bs-secondary-heading-color: inherit;
+    --bs-tertiary-heading-color: inherit;
     --bs-link-color: #0d6efd;
     --bs-link-color-rgb: 13, 110, 253;
     --bs-link-decoration: underline;
@@ -217,8 +218,6 @@ h5,
 .h5,
 h4,
 .h4,
-h2,
-.h2,
 h1,
 .h1 {
     color: var(--bs-heading-color);
@@ -228,9 +227,18 @@ h1,
     line-height: 1.2
 }
 
+h2,
+.h2 {
+    color: var(--bs-secondary-heading-color);
+    margin-top: 0;
+    margin-bottom: .5rem;
+    font-weight: 500;
+    line-height: 1.2
+}
+
 h3,
 .h3 {
-    color: var(--bs-secondary-heading-color);
+    color: var(--bs-tertiary-heading-color);
     margin-top: 0;
     margin-bottom: .5rem;
     font-weight: 500;
@@ -14021,4 +14029,23 @@ em {
 .swoop_banner>svg {
     width: 100%;
     height: 100%;
+}
+
+@font-face {
+    font-family: "GothamPro";
+    src: url("../GothamPro.otf");
+    font-weight: normal;
+}
+
+@font-face {
+    font-family: "GothamPro";
+    src: url("../GothamPro-Medium.otf");
+    font-weight: bold;
+}
+
+@font-face {
+    font-family: "GothamPro";
+    src: url("../GothamPro-Italic.otf");
+    font-weight: normal;
+    font-style: italic;
 }

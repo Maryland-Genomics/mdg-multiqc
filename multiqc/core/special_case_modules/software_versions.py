@@ -18,7 +18,7 @@ class MultiqcModule(BaseMultiqcModule):
     def __init__(self):
         # Initialise the parent object
         super().__init__(
-            name="Software Versions",
+            name="Software Versions and Citations",
             anchor=Anchor("multiqc_software_versions"),
             info="lists versions of software tools extracted from file contents.",
         )

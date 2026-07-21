@@ -56,33 +56,45 @@ http://multiqc.info
     <div class="toast-body"></div>
   </div>
   <script>
-    // Move MDG Analysis section above cell ranger
+    // Reorder modules
     // Navbar
     nav = document.getElementsByClassName("mqc-nav")[0]
     analysisSection = null
     cellRanger = null
-    nav.querySelectorAll("li").forEach(li => { //Find the MDG Analysis section and Cell Ranger module
-        if (li.querySelector("a").textContent.includes("MDG Analysis"))
+    readStats = null
+    megablastQC = null
+    cutAdapt = null
+    nav.querySelectorAll("li").forEach(li => {
+        if (li.querySelector("a").textContent.includes("Secondary Analysis"))
             analysisSection = li
         if (li.querySelector("a").textContent.includes("Cell Ranger"))
             cellRanger = li
+        if (li.querySelector("a").textContent.includes("Read Stats"))
+            readStats = li
+        if (li.querySelector("a").textContent.includes("MegaBlast QC"))
+            megablastQC = li
+        if (li.querySelector("a").textContent.includes("Cutadapt"))
+            cutAdapt = li
     })
     nav.insertBefore(analysisSection, cellRanger)
+    nav.insertBefore(readStats, cutAdapt)
+    nav.insertBefore(megablastQC, analysisSection)
     
     processingArray = []
     analysisArray = []
 
-    // Get all MDG Processing and Analysis modules
+    // Get all MDG Processing and QC and Analysis modules
     document.querySelectorAll(".mqc-nav > li").forEach(li => {
       const asub = li.querySelector("a")
       if (asub.textContent.includes("bcl2fastq") || asub.textContent.includes("FastQC") ||
-       asub.textContent.includes("Cutadapt") || asub.textContent.includes("Trimmomatic")) {
-        asub.textContent = "⠀⠀"  + asub.textContent // Add an indent
-        processingArray.push(li) // fill out MDG Processing array
+       asub.textContent.includes("Cutadapt") || asub.textContent.includes("Trimmomatic") ||
+        asub.textContent.includes("Read Stats") || asub.textContent.includes("MegaBlast QC")) {
+        asub.textContent = "⠀"  + asub.textContent // Add an indent
+        processingArray.push(li) // fill out MDG Processing and QC array
         li.style.display = "none" // default to hiding
       }
       else if (asub.textContent.includes("Cell Ranger") || asub.textContent.includes("Space Ranger")) {
-        asub.textContent = "⠀⠀"  + asub.textContent
+        asub.textContent = "⠀"  + asub.textContent
         analysisArray.push(li)
         li.style.display = "none"
       }
@@ -101,17 +113,17 @@ http://multiqc.info
           if (!sub1) return; // nothing to do if no children
 
           if (li !== li1) { // close all sections that aren't this one
-            if (!(li1.querySelector("a").textContent.includes("MDG Processing") && processingArray.includes(li))
-                && !(li1.querySelector("a").textContent.includes("MDG Analysis") && analysisArray.includes(li))) {
+            if (!(li1.querySelector("a").textContent.includes("MDG Processing and QC") && processingArray.includes(li))
+                && !(li1.querySelector("a").textContent.includes("Secondary Analysis") && analysisArray.includes(li))) {
                 // Don't close parent sections if opening child sections
                 sub1.style.display = "none";
             }
-            if (li1.querySelector("a").textContent.includes("MDG Processing") && !processingArray.includes(li)) { // Hide submodules of previous section
+            if (li1.querySelector("a").textContent.includes("MDG Processing and QC") && !processingArray.includes(li)) { // Hide submodules of previous section
                 processingArray.forEach(li2 => {
                     li2.style.display = "none"
                 })
             }
-            if (li1.querySelector("a").textContent.includes("MDG Analysis") && !analysisArray.includes(li)) {
+            if (li1.querySelector("a").textContent.includes("Secondary Analysis") && !analysisArray.includes(li)) {
                 analysisArray.forEach(li2 => {
                     li2.style.display = "none"
                 })
@@ -124,7 +136,7 @@ http://multiqc.info
         }
 
         function alternateSubModules() {
-            if (li.querySelector("a").textContent.includes("MDG Processing")) { // Hide or show submodules
+            if (li.querySelector("a").textContent.includes("MDG Processing and QC")) { // Hide or show submodules
                 processingArray.forEach(li2 => {
                     if (li2.style.display == "none") {
                     li2.style.display = "block"
@@ -134,7 +146,7 @@ http://multiqc.info
                     }
                 })
                 }
-                if (li.querySelector("a").textContent.includes("MDG Analysis")) {
+                if (li.querySelector("a").textContent.includes("Secondary Analysis")) {
                 analysisArray.forEach(li2 => {
                     if (li2.style.display == "none") {
                     li2.style.display = "block"
@@ -181,8 +193,8 @@ http://multiqc.info
         tr.style.cursor = "pointer"
       })
       tr.addEventListener("mouseleave", () => {
-        // Switch to default cursor when moving off megablast table
-        tr.style.cursor = "default"
+        // Switch to auto cursor when moving off megablast table
+        tr.style.cursor = "auto"
       })
     })
   </script>
@@ -190,13 +202,22 @@ http://multiqc.info
     // Reorder report content
     content = document.getElementsByClassName("mqc-module-section")
     parent = document.getElementsByClassName("p-4 pe-5")[0]
-    Array.from(content).forEach(div => { //Find the MDG Analysis section and Cell Ranger module
-        if (div.getAttribute("id").includes("mdg_analysis"))
+
+    Array.from(content).forEach(div => { //Find the Secondary Analysis section and Cell Ranger module
+        if (div.getAttribute("id").includes("secondary_analysis"))
             analysisSection = div
         if (div.getAttribute("id").includes("cellranger"))
             cellRanger = div
+        if (div.getAttribute("id").includes("read_stats"))
+            readStats = div
+        if (div.getAttribute("id").includes("megablast_qc"))
+            megablastQC = div
+        if (div.getAttribute("id").includes("cutadapt"))
+            cutAdapt = div
     })
     parent.insertBefore(analysisSection, cellRanger)
+    parent.insertBefore(readStats, cutAdapt)
+    parent.insertBefore(megablastQC, analysisSection)
 
 
     // Collapsible sections
@@ -207,7 +228,8 @@ http://multiqc.info
 
     moduleSections.forEach(div => {
       if (div.getAttribute("id").includes("bcl2fastq") || div.getAttribute("id").includes("fastqc") || 
-          div.getAttribute("id").includes("cutadapt") || div.getAttribute("id").includes("trimmomatic")) {
+          div.getAttribute("id").includes("cutadapt") || div.getAttribute("id").includes("trimmomatic")
+         || div.getAttribute("id").includes("read_stats") || div.getAttribute("id").includes("megablast_qc")) {
         processingSections.push(div)
       }
       if (div.getAttribute("id").includes("cellranger") || div.getAttribute("id").includes("spaceranger")) {
@@ -256,7 +278,7 @@ http://multiqc.info
             })
           }
         }
-        if (x.getAttribute("id").includes("mdg_analysis")) {
+        if (x.getAttribute("id").includes("secondary_analysis")) {
           if (showAnalysis == false) {
             showAnalysis = true
             analysisSections.forEach(z => {
@@ -276,8 +298,8 @@ http://multiqc.info
         document.body.style.cursor = "pointer"
       })
       header.addEventListener("mouseleave", () => {
-        // Switch to default cursor when moving off header
-        document.body.style.cursor = "default"
+        // Switch to auto cursor when moving off header
+        document.body.style.cursor = "auto"
       })
     })
 
