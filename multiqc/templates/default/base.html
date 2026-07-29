@@ -59,44 +59,103 @@ http://multiqc.info
     // Reorder modules
     // Navbar
     nav = document.getElementsByClassName("mqc-nav")[0]
-    analysisSection = null
-    cellRanger = null
-    //readStats = null
-    megablastQC = null
-    //cutAdapt = null
+    sequencingResultsDict = {
+      "read_stats_parent": "Read Stats"
+    }
+    mdgProcessingDict = {
+      "bcl2fastq": "bcl2fastq",
+      "fastqc": "FastQC",
+      "cutadapt": "Cutadapt",
+      "trimmomatic": "Trimmomatic",
+      "megablast_qc_parent": "MegaBlast QC"
+    }
+    secondaryAnalysisDict = {
+      "cellranger": "Cell Ranger",
+      "spaceranger": "Space Ranger",
+    }
+
+    //sections that must be reordered
+    analysisNavSection = null
+    megaBlastNavSection = null
+    readStatsNavSection = null
+    mdgProcessingNavSection = null
+
     nav.querySelectorAll("li").forEach(li => {
-        if (li.querySelector("a").textContent.includes("Secondary Analysis"))
-            analysisSection = li
-        if (li.querySelector("a").textContent.includes("Cell Ranger"))
-            cellRanger = li
-        //if (li.querySelector("a").textContent.includes("Read Stats"))
-            //readStats = li
-        if (li.querySelector("a").textContent.includes("MegaBlast QC"))
-            megablastQC = li
-        //if (li.querySelector("a").textContent.includes("Cutadapt"))
-            //cutAdapt = li
+      if (li.querySelector("a").innerHTML.includes("Secondary Analysis"))
+        analysisNavSection = li
+      if (li.querySelector("a").innerHTML.includes("MegaBlast QC"))
+        megaBlastNavSection = li
+      if (li.querySelector("a").innerHTML.includes("Read Stats") && readStatsNavSection == null)
+        readStatsNavSection = li
+      if (li.querySelector("a").innerHTML.includes("MDG Processing and QC"))
+        mdgProcessingNavSection = li
     })
-    nav.insertBefore(analysisSection, cellRanger)
-    //nav.insertBefore(readStats, cutAdapt)
-    nav.insertBefore(megablastQC, analysisSection)
-    
+
+    //reorder secondary analysis
+    for (const [key, value] of Object.entries(mdgProcessingDict)) {
+      nav.querySelectorAll("li").forEach(li => {
+        if (li.querySelector("a").innerHTML.includes(value)) {
+          nav.insertBefore(li, analysisNavSection)
+        }
+      })
+    }
+
+    //reorder megablast
+    if (megaBlastNavSection != null) {
+      for (const [key, value] of Object.entries(mdgProcessingDict)) {
+        nav.querySelectorAll("li").forEach(li => {
+          if (li.querySelector("a").innerHTML.includes(value)) {
+            nav.insertBefore(li, megaBlastNavSection)
+          }
+        })
+      }
+    }
+
+    //reorder read stats
+    if (readStatsNavSection != null) {
+      console.log("hit")
+      nav.insertBefore(readStatsNavSection, mdgProcessingNavSection)
+    }
+
+
+    nav.querySelectorAll("li").forEach(li => {
+      console.log(li)
+    })
+
+    sequencingArray = []
     processingArray = []
     analysisArray = []
 
-    // Get all MDG Processing and QC and Analysis modules
+    // Get all MDG Processing and QC and Analysis nav modules
     document.querySelectorAll(".mqc-nav > li").forEach(li => {
       const asub = li.querySelector("a")
-      if (asub.textContent.includes("bcl2fastq") || asub.textContent.includes("FastQC") ||
-       asub.textContent.includes("Cutadapt") || asub.textContent.includes("Trimmomatic") ||
-        /*asub.textContent.includes("Read Stats") ||*/ asub.textContent.includes("MegaBlast QC")) {
-        asub.textContent = "⠀"  + asub.textContent // Add an indent
-        processingArray.push(li) // fill out MDG Processing and QC array
-        li.style.display = "none" // default to hiding
+
+      var inSequencingNav = false
+      var inProcessingNav = false
+      var inAnalysisNav = false
+
+      for (const [key, value] of Object.entries(sequencingResultsDict)) {
+        inSequencingNav = asub.innerHTML.includes(value) ? true : inSequencingNav
       }
-      else if (asub.textContent.includes("Cell Ranger") || asub.textContent.includes("Space Ranger")) {
-        asub.textContent = "⠀"  + asub.textContent
-        analysisArray.push(li)
-        li.style.display = "none"
+      for (const [key, value] of Object.entries(mdgProcessingDict)) {
+        inProcessingNav = asub.innerHTML.includes(value) ? true : inProcessingNav
+      }
+      for (const [key, value] of Object.entries(secondaryAnalysisDict)) {
+        inAnalysisNav = asub.innerHTML.includes(value) ? true : inAnalysisNav
+      }
+
+      if (inSequencingNav || inProcessingNav || inAnalysisNav) {
+        asub.textContent = "⠀" + asub.textContent // Add an indent
+        lisub = li.querySelector("ul").querySelectorAll("li")
+        lisub.forEach(x => {
+          x.querySelector("a").textContent = "⠀⠀" + x.querySelector("a").textContent
+        })
+
+        if (inSequencingNav) sequencingArray.push(li)
+        if (inProcessingNav) processingArray.push(li)
+        if (inAnalysisNav) analysisArray.push(li)
+
+        li.style.display = "none" // default to hiding
       }
     })
 
@@ -114,19 +173,25 @@ http://multiqc.info
 
           if (li !== li1) { // close all sections that aren't this one
             if (!(li1.querySelector("a").textContent.includes("MDG Processing and QC") && processingArray.includes(li))
-                && !(li1.querySelector("a").textContent.includes("Secondary Analysis") && analysisArray.includes(li))) {
-                // Don't close parent sections if opening child sections
-                sub1.style.display = "none";
+              && !(li1.querySelector("a").textContent.includes("Secondary Analysis") && analysisArray.includes(li))
+              && !(li1.querySelector("a").textContent.includes("Sequencing Results") && sequencingArray.includes(li))) {
+              // Don't close parent sections if opening child sections
+              sub1.style.display = "none";
+            }
+            if (li1.querySelector("a").textContent.includes("Sequencing Results") && !sequencingArray.includes(li)) { // Hide submodules of previous section
+              sequencingArray.forEach(li2 => {
+                li2.style.display = "none"
+              })
             }
             if (li1.querySelector("a").textContent.includes("MDG Processing and QC") && !processingArray.includes(li)) { // Hide submodules of previous section
-                processingArray.forEach(li2 => {
-                    li2.style.display = "none"
-                })
+              processingArray.forEach(li2 => {
+                li2.style.display = "none"
+              })
             }
             if (li1.querySelector("a").textContent.includes("Secondary Analysis") && !analysisArray.includes(li)) {
-                analysisArray.forEach(li2 => {
-                    li2.style.display = "none"
-                })
+              analysisArray.forEach(li2 => {
+                li2.style.display = "none"
+              })
             }
           }
         });
@@ -136,31 +201,40 @@ http://multiqc.info
         }
 
         function alternateSubModules() {
-            if (li.querySelector("a").textContent.includes("MDG Processing and QC")) { // Hide or show submodules
-                processingArray.forEach(li2 => {
-                    if (li2.style.display == "none") {
-                    li2.style.display = "block"
-                    }
-                    else {
-                    li2.style.display = "none"
-                    }
-                })
-                }
-                if (li.querySelector("a").textContent.includes("Secondary Analysis")) {
-                analysisArray.forEach(li2 => {
-                    if (li2.style.display == "none") {
-                    li2.style.display = "block"
-                    }
-                    else {
-                    li2.style.display = "none"
-                    }
-                })
-            }
+          if (li.querySelector("a").textContent.includes("Sequencing Results")) { // Hide or show submodules
+            sequencingArray.forEach(li2 => {
+              if (li2.style.display == "none") {
+                li2.style.display = "block"
+              }
+              else {
+                li2.style.display = "none"
+              }
+            })
+          }
+          if (li.querySelector("a").textContent.includes("MDG Processing and QC")) { // Hide or show submodules
+            processingArray.forEach(li2 => {
+              if (li2.style.display == "none") {
+                li2.style.display = "block"
+              }
+              else {
+                li2.style.display = "none"
+              }
+            })
+          }
+          if (li.querySelector("a").textContent.includes("Secondary Analysis")) {
+            analysisArray.forEach(li2 => {
+              if (li2.style.display == "none") {
+                li2.style.display = "block"
+              }
+              else {
+                li2.style.display = "none"
+              }
+            })
+          }
         }
       });
     });
-  </script>
-  <script>
+
     // Hidden Top 50 hits for MDG Megablast Table
 
     var megaBlastTable = document.getElementById("megablast_qc-plot_table").getElementsByTagName("tbody")[0];
@@ -197,53 +271,151 @@ http://multiqc.info
         tr.style.cursor = "auto"
       })
     })
-  </script>
-  <script>
+
+    // Add show all tophits button
+    var megaBlastTable = document.getElementById("mqc_violintable_wrapper_megablast_qc-plot_table")
+    var showText = megaBlastTable.querySelector(".mqc_table_numrows_text")
+    showTopHits = false
+
+    showAllButton = document.createElement("button")
+    showAllButton.setAttribute("type", "button")
+    showAllButton.setAttribute("class", "megablast_expand_tophits btn btn-outline-secondary btn-sm")
+    showAllButton.setAttribute("data-plot-anchor", "megablast_qc-plot")
+    showAllButton.setAttribute("data-bs-toggle", "tooltip")
+    showAllButton.setAttribute("data-bs-original-title", "Expand/Collapse all tophits tables")
+    showAllButton.innerHTML = "Expand Tophits"
+
+    showText.parentElement.insertBefore(showAllButton, showText)
+
+    // Add functionality
+    showAllButton.addEventListener("click", () => {
+      showTopHits = !showTopHits
+      showAllButton.innerHTML = showTopHits ? "Collapse Tophits" : "Expand Tophits"
+      showTopHitsDisplay = showTopHits ? "block" : "none"
+
+      topHitsTables.forEach(table => {
+        table.style.display = showTopHitsDisplay
+      })
+    })
+
     // Reorder report content
     content = document.getElementsByClassName("mqc-module-section")
     parent = document.getElementsByClassName("p-4 pe-5")[0]
+
+    showSequencing = true
     showProcess = true
     showAnalysis = true
 
-    Array.from(content).forEach(div => { //Find the Secondary Analysis section and Cell Ranger module
-        if (div.getAttribute("id").includes("secondary_analysis"))
-            analysisSection = div
-        if (div.getAttribute("id").includes("cellranger"))
-            cellRanger = div
-        //if (div.getAttribute("id").includes("read_stats"))
-        //    readStats = div
-        if (div.getAttribute("id").includes("megablast_qc"))
-            megablastQC = div
-        //if (div.getAttribute("id").includes("cutadapt"))
-        //    cutAdapt = div
-    })
-    parent.insertBefore(analysisSection, cellRanger)
-    //parent.insertBefore(readStats, cutAdapt)
-    parent.insertBefore(megablastQC, analysisSection)
+    analysisReportSection = null
+    megaBlastReportSection = null
+    readStatsReportSection = null
+    sequencingResultsReportSection = null
 
+    Array.from(content).forEach(div => { //Find the Secondary Analysis section and megablast section
+      if (div.getAttribute("id").includes("secondary_analysis"))
+        analysisReportSection = div
+      if (div.getAttribute("id").includes("megablast_qc"))
+        megaBlastReportSection = div
+      if (div.getAttribute("id").includes("read_stats_parent"))
+        readStatsReportSection = div
+      if (div.getAttribute("id").includes("sequencing_results"))
+        sequencingResultsReportSection = div
+    })
+
+    for (const [key, value] of Object.entries(mdgProcessingDict)) {
+      Array.from(content).forEach(div => {
+        if (div.getAttribute("id").includes(key)) {
+          parent.insertBefore(div, analysisReportSection) //reorder analysis section
+        }
+      })
+    }
+
+    if (megaBlastReportSection != null) {
+      for (const [key, value] of Object.entries(mdgProcessingDict)) {
+        Array.from(content).forEach(div => {
+          if (div.getAttribute("id").includes(key)) {
+            parent.insertBefore(div, megaBlastReportSection) //reorder megablast section
+          }
+        })
+      }
+    }
+
+    if (readStatsReportSection != null) {
+      parent.insertBefore(readStatsReportSection, sequencingResultsReportSection)
+      parent.insertBefore(sequencingResultsReportSection, readStatsReportSection)
+    }
 
     // Collapsible sections
     moduleSections = Array.from(document.getElementsByClassName("mqc-module-section")) //every module section
 
+    sequencingSections = []
     processingSections = []
     analysisSections = []
 
-    moduleSections.forEach(div => {
-      if (div.getAttribute("id").includes("bcl2fastq") || div.getAttribute("id").includes("fastqc") || 
-          div.getAttribute("id").includes("cutadapt") || div.getAttribute("id").includes("trimmomatic")
-         || /*div.getAttribute("id").includes("read_stats") ||*/ div.getAttribute("id").includes("megablast_qc")) {
-        processingSections.push(div)
-      }
-      if (div.getAttribute("id").includes("cellranger") || div.getAttribute("id").includes("spaceranger")) {
-        analysisSections.push(div)
-      }
-    })
+    for (const [key, value] of Object.entries(sequencingResultsDict)) {
+      moduleSections.forEach(div => {
+        if (div.getAttribute("id").includes(key)) {
+          sequencingSections.push(div)
+        }
+      })
+    }
+
+    for (const [key, value] of Object.entries(mdgProcessingDict)) {
+      moduleSections.forEach(div => {
+        if (div.getAttribute("id").includes(key)) {
+          processingSections.push(div)
+        }
+      })
+    }
+
+    for (const [key, value] of Object.entries(secondaryAnalysisDict)) {
+      moduleSections.forEach(div => {
+        if (div.getAttribute("id").includes(key)) {
+          analysisSections.push(div)
+        }
+      })
+    }
 
     collapseButton = document.getElementById("collapse_sections")
     collapsed = false
 
     moduleSections.forEach(x => {
       header = Array.from(x.getElementsByTagName("h2"))[0] //event when click on title
+
+      sequencingSections.forEach(x => {
+        if (x.contains(header)) {
+          newHeader = document.createElement("h7") // replace header if in processing
+          newHeader.innerHTML = header.innerHTML
+          for (const attr of header.attributes) {
+            newHeader.setAttribute(attr.name, attr.value);
+          }
+          header.replaceWith(newHeader)
+          header = newHeader
+        }
+      })
+      processingSections.forEach(x => {
+        if (x.contains(header)) {
+          newHeader = document.createElement("h7") // replace header if in processing
+          newHeader.innerHTML = header.innerHTML
+          for (const attr of header.attributes) {
+            newHeader.setAttribute(attr.name, attr.value);
+          }
+          header.replaceWith(newHeader)
+          header = newHeader
+        }
+      })
+      analysisSections.forEach(x => {
+        if (x.contains(header)) {
+          newHeader = document.createElement("h7") // replace header if in analysis
+          newHeader.innerHTML = header.innerHTML
+          for (const attr of header.attributes) {
+            newHeader.setAttribute(attr.name, attr.value);
+          }
+          header.replaceWith(newHeader)
+          header = newHeader
+        }
+      })
+
       header.addEventListener("click", () => {
         if (x.getAttribute("id").includes("general_stats")) { //special case for general stats table
           genStatsTable = x.querySelector("[id=mqc_violintable_wrapper_general_stats_table_table]")
@@ -266,17 +438,31 @@ http://multiqc.info
             y.style.display = "none"
           }
         })
+        if (x.getAttribute("id").includes("sequencing_results")) {
+          if (showSequencing == false) {
+            showSequencing = true
+            sequencingSections.forEach(z => {
+              z.style.display = "block"
+            })
+          }
+          else {
+            showSequencing = false
+            sequencingSections.forEach(z => {
+              z.style.display = "none"
+            })
+          }
+        }
         if (x.getAttribute("id").includes("mdg_processing")) {
           if (showProcess == false) {
             showProcess = true
             processingSections.forEach(z => {
-                z.style.display = "block"
+              z.style.display = "block"
             })
           }
           else {
             showProcess = false
             processingSections.forEach(z => {
-                z.style.display = "none"
+              z.style.display = "none"
             })
           }
         }
@@ -284,13 +470,13 @@ http://multiqc.info
           if (showAnalysis == false) {
             showAnalysis = true
             analysisSections.forEach(z => {
-                z.style.display = "block"
+              z.style.display = "block"
             })
           }
           else {
             showAnalysis = false
             analysisSections.forEach(z => {
-                z.style.display = "none"
+              z.style.display = "none"
             })
           }
         }
@@ -307,9 +493,9 @@ http://multiqc.info
 
     // Collapse all sections button
     collapseButton.addEventListener("click", () => {
-        collapsed = !collapsed
-        displayState = ""
-        if (collapsed) {
+      collapsed = !collapsed
+      displayState = ""
+      if (collapsed) {
         displayState = "none"
         collapseButton.innerHTML = "Expand All Sections"
       }
@@ -332,12 +518,13 @@ http://multiqc.info
             y.style.display = "none"
           }
         })
-        if (processingSections.includes(x) || analysisSections.includes(x)) {
-            x.style.display = displayState
+        if (processingSections.includes(x) || analysisSections.includes(x) || sequencingSections.includes(x)) {
+          x.style.display = displayState
         }
       })
       showProcess = !collapsed
       showAnalysis = !collapsed
+      showSequencing = !collpased
     })
   </script>
   {% include 'foot.html' %}

@@ -89,6 +89,7 @@
     --bs-heading-color: inherit;
     --bs-secondary-heading-color: inherit;
     --bs-tertiary-heading-color: inherit;
+    --bs-quaternary-heading-color: inherit;
     --bs-link-color: #0d6efd;
     --bs-link-color-rgb: 13, 110, 253;
     --bs-link-decoration: underline;
@@ -238,6 +239,15 @@ h2,
 
 h3,
 .h3 {
+    color: var(--bs-quaternary-heading-color);
+    margin-top: 0;
+    margin-bottom: .5rem;
+    font-weight: 500;
+    line-height: 1.2
+}
+
+h7,
+.h7 {
     color: var(--bs-tertiary-heading-color);
     margin-top: 0;
     margin-bottom: .5rem;
@@ -309,7 +319,21 @@ h6,
 
 p {
     margin-top: 0;
-    margin-bottom: 1rem
+    margin-bottom: 1rem;
+    color: var(--bs-heading-color);
+}
+
+h7,
+.h7 {
+    font-size: calc(1.295rem + .54vw)
+}
+
+@media (width>=1200px) {
+
+    h7,
+    .h7 {
+        font-size: 1.55rem
+    }
 }
 
 abbr[title] {
@@ -14033,19 +14057,19 @@ em {
 
 @font-face {
     font-family: "GothamPro";
-    src: url("../GothamPro.otf");
+    src: url("../../../assets/GothamPro.otf");
     font-weight: normal;
 }
 
 @font-face {
     font-family: "GothamPro";
-    src: url("../GothamPro-Medium.otf");
+    src: url("../../../assets/GothamPro-Medium.otf");
     font-weight: bold;
 }
 
 @font-face {
     font-family: "GothamPro";
-    src: url("../GothamPro-Italic.otf");
+    src: url("../../../assets/GothamPro-Italic.otf");
     font-weight: normal;
     font-style: italic;
 }
