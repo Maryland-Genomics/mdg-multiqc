@@ -1,0 +1,18 @@
+:root {
+    --bs-heading-color: #2c2a29;
+    --bs-secondary-heading-color: #ed1c24;
+    --bs-tertiary-heading-color: #2c2a29;
+    --bs-quaternary-heading-color: #635f5c;
+    --bs-secondary-bg: #2c2a29;
+    --bs-body-background: #f3f3f3; 
+    --bs-card-bg: #2c2a29;
+    --bs-body-bg: #f3f3f3;
+    --bs-body-color: #f3f3f3;
+    --bs-link-color-rgb: #f3f3f3;
+    --bs-link-hover-color-rgb: #f5c62e;
+    --bs-card-color: #2c2a29;
+    --bs-secondary-color: #f3f3f3;
+    --bs-tertiary-color: #f3f3f3;
+    --bs-tertiary-bg: #2c2a29;
+}
+
