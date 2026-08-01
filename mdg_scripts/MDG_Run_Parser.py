@@ -3,32 +3,36 @@ import os
 import shutil
 import xml.etree.ElementTree as ET
 import numpy as np
+import re
 
-def parse(p_dirname : str, p_project : str, p_runtype : str):
+def parse(p_path : str, p_project : str, p_runtype : str, p_unaliged_folder : str):
     project = p_project
-    dirname = p_dirname
+    path = p_path
     runtype = p_runtype
+    unaligned_folder = p_unaliged_folder
+    
 
     mdg_illumina_folder_name = "MDG_Run_Parsed_Files"
-    project_dir = dirname + "/Unaligned_8bp/QA/Project_" + project
+    project_dir = f"{path}/{unaligned_folder}/QA/Project_{project}"
     mdg_parsed_dir = None
 
     if runtype == "Illumina":
-        mdg_parsed_dir =  project_dir + "/" + mdg_illumina_folder_name
+        mdg_parsed_dir =  f"{project_dir}/{mdg_illumina_folder_name}"
     elif runtype == "PacBio":
-        mdg_parsed_dir = f"{dirname}/Project_{project}_{mdg_illumina_folder_name}"
+        mdg_parsed_dir = f"{path}/Project_{project}_{mdg_illumina_folder_name}"
 
 
     generate_MDG_parsed_folder(mdg_parsed_dir)
-    parse_work_order_info(dirname, project, mdg_parsed_dir, runtype)
-    generate_sample_info(dirname, mdg_parsed_dir, project, runtype)
-    generate_read_stats(dirname, mdg_parsed_dir, project, runtype)
-    copy_plots(dirname, mdg_parsed_dir, project, runtype)
-    parse_megablastqc_info(dirname, mdg_parsed_dir, project, runtype)
+    parse_work_order_info(path, project, mdg_parsed_dir, runtype)
+    generate_sample_info(path, mdg_parsed_dir, project, runtype)
+    generate_read_stats(path, mdg_parsed_dir, project, runtype)
+    copy_plots(path, mdg_parsed_dir, project, runtype)
+    parse_megablastqc_info(path, mdg_parsed_dir, project, runtype, unaligned_folder)
+    move_module_files(path, mdg_parsed_dir, unaligned_folder)
 
     if (runtype == "Illumina"):
-        parse_sequencing_info(dirname, mdg_parsed_dir)
-        parse_flowcell_info(dirname, mdg_parsed_dir)
+        parse_sequencing_info(path, mdg_parsed_dir)
+        parse_flowcell_info(path, mdg_parsed_dir)
     elif (runtype == "PacBio"):
         pass
     post_process_csv(mdg_parsed_dir)
@@ -46,10 +50,10 @@ def generate_MDG_parsed_folder(mdg_parsed_dir):
         print(f"An error occurred: {e}")
 
 # Creates a file to store parsed sequencing info in the illumina folder
-def parse_sequencing_info(dirname, mdg_parsed_dir):
+def parse_sequencing_info(path, mdg_parsed_dir):
     # Copy files
-    run_param = shutil.copy(f"{dirname}/RunParameters.xml", mdg_parsed_dir)
-    run_info = shutil.copy(f"{dirname}/RunInfo.xml", mdg_parsed_dir)
+    run_param = shutil.copy(f"{path}/RunParameters.xml", mdg_parsed_dir)
+    run_info = shutil.copy(f"{path}/RunInfo.xml", mdg_parsed_dir)
 
     # Get roots
     param_tree = ET.parse(run_param)
@@ -95,15 +99,15 @@ def parse_sequencing_info(dirname, mdg_parsed_dir):
 
     # Convert to csv
     df = pd.DataFrame(data)
-    df.to_csv(mdg_parsed_dir + "/sequencing_info.csv", index=False)
+    df.to_csv(f"{mdg_parsed_dir}/sequencing_info.csv", index=False)
 
 # Creates a file to store parsed flowcell info in the illumina folder
-def parse_flowcell_info(dirname, mdg_parsed_dir):
+def parse_flowcell_info(path, mdg_parsed_dir):
     # Copy file (temporarily, since MultiQC recognizes summary.csv and replaces custom content module with Illumina Module)
-    flow_cell_info = shutil.copy(f"{dirname}/PA_Logs/summary.csv", mdg_parsed_dir)
+    flow_cell_info = shutil.copy(f"{path}/PA_Logs/summary.csv", mdg_parsed_dir)
 
     with open(flow_cell_info, "r") as input:
-        with open(mdg_parsed_dir + "/temp.csv", "w") as output:
+        with open(f"{mdg_parsed_dir}/temp.csv", "w") as output:
             data = input.read().splitlines(True)
             blank_index = data.index("\n")
             # iterate all lines from file
@@ -112,12 +116,12 @@ def parse_flowcell_info(dirname, mdg_parsed_dir):
                 output.write(data[line])
             
     # Generate cleaned file, remove copy
-    clean_data = mdg_parsed_dir + "/summary_clean.csv"
-    os.replace(mdg_parsed_dir + "/temp.csv", clean_data)
+    clean_data = f"{mdg_parsed_dir}/summary_clean.csv"
+    os.replace(f"{mdg_parsed_dir}/temp.csv", clean_data)
     os.remove(flow_cell_info)
 
 # Creates a file to store parsed MegaBlast QC info in the illumina folder
-def parse_megablastqc_info(dirname, mdg_parsed_dir, project, runtype):
+def parse_megablastqc_info(path, mdg_parsed_dir, project, runtype, unaligned_folder):
     # Set up dataframe
     data = {
         "ID": [],
@@ -138,9 +142,9 @@ def parse_megablastqc_info(dirname, mdg_parsed_dir, project, runtype):
 
     tophits_directory = None
     if (runtype == "Illumina"):
-        tophits_directory = f"{dirname}/Unaligned_8bp/QC/Project_" + project
+        tophits_directory = f"{path}/{unaligned_folder}/QC/Project_{project}"
     elif (runtype == "PacBio"):
-        tophits_directory = f"{dirname}/1_{get_cell(dirname, project)}/hifi_reads/QC"
+        tophits_directory = f"{path}/1_{get_cell(path, project)}/hifi_reads/QC"
 
     tophits_count = 0
 
@@ -148,7 +152,7 @@ def parse_megablastqc_info(dirname, mdg_parsed_dir, project, runtype):
         for sample in os.listdir(tophits_directory):
             if sample.startswith("Sample"):
                 # Assume file called *.topHits.txt, get all files
-                for tophits_file in os.listdir(tophits_directory + "/" + sample + "/QC"):
+                for tophits_file in os.listdir(f"{tophits_directory}/{sample}/QC"):
                     # Get all files in directory that end with topHits.txt
                     if tophits_file.endswith("topHits.txt"):
                         data, tophits_count = get_tophits(data, f"{tophits_directory}/{sample}/QC", tophits_file, mdg_parsed_dir, project, tophits_count, runtype)
@@ -159,151 +163,152 @@ def parse_megablastqc_info(dirname, mdg_parsed_dir, project, runtype):
 
     # Write data to new csv file
     df = pd.DataFrame(data)
-    df.to_csv(mdg_parsed_dir + "/all_tophits.csv", index=True)
+    df.to_csv(f"{mdg_parsed_dir}/all_tophits.csv", index=True)
 
 def get_tophits(data, tophits_directory, tophits_file, mdg_parsed_dir, project, tophits_count, runtype):
     try:
         with open(f"{tophits_directory}/{tophits_file}") as fin:
             tophits = fin.read().splitlines(True)
     
-            # Parse txt contents
-            if runtype == "Illumina":
-                id_index_start = tophits[0].find(":", tophits[0].find(":") + 1) + 1
-                id_index_end = tophits[0].find("lane:") + 6
-                id = tophits[0][id_index_start:id_index_end]
-                id = id.replace(":lane:", "-")
-                data["ID"].append(id)
-            elif runtype == "PacBio":
-                id_index_start = tophits_file.find("reads") + 6
-                id_index_end = tophits_file.find(".subset")
-                id = tophits_file[id_index_start:id_index_end]
-                data["ID"].append(id)
-    
-            spec_name_index_start = tophits[0].find(project) + len(project) + 1
-            spec_name_index_end = tophits[0].find(":", spec_name_index_start)
-            spec_name = tophits[0][spec_name_index_start:spec_name_index_end]
-            data["Specimen Name"].append(spec_name)
-    
-            th_expected_spec_index = index_containing_substring(tophits, "Sp.Description:") # th_ indexes refer to those of tophits
-            expected_spec_index = tophits[th_expected_spec_index].find(":") + 2
-            expected_spec = tophits[th_expected_spec_index][expected_spec_index:]
-            expected_spec = expected_spec.replace("\n", "")
-            data["Expected Species"].append(expected_spec)
-    
-            th_total_reads_index = index_containing_substring(tophits, "Total_reads:")
-            total_reads_index = tophits[th_total_reads_index].find(":") + 2
-            total_reads = tophits[th_total_reads_index][total_reads_index:]
-            total_reads = total_reads.replace("\n", "")
-            data["Total Reads"].append(total_reads)
-    
-            th_total_reads_wh_index = index_containing_substring(tophits, "Total reads with hits:")
-            total_reads_wh_index_start = tophits[th_total_reads_wh_index].find(":") + 2
-            total_reads_wh_index_end = tophits[th_total_reads_wh_index].find("(")
-            total_reads_wh = tophits[th_total_reads_wh_index][total_reads_wh_index_start:total_reads_wh_index_end]
-            data["Total Reads With Hits"].append(total_reads_wh)
-    
-            total_reads_wh_p_index_start = total_reads_wh_index_end + 1
-            total_reads_wh_p_index_end = tophits[th_total_reads_wh_index].find(")")
-            total_reads_wh_p = tophits[th_total_reads_wh_index][total_reads_wh_p_index_start:total_reads_wh_p_index_end]
-            data["Total Reads With Hits Percent"].append(total_reads_wh_p)
-    
-            th_genus_match_hits_index = index_containing_substring(tophits, "Genus match hits:")
-            genus_match_hits_index_start = tophits[th_genus_match_hits_index].find(":") + 2
-            genus_match_hits_index_end = tophits[th_genus_match_hits_index].find("(")
-            genus_match_hits = tophits[th_genus_match_hits_index][genus_match_hits_index_start:genus_match_hits_index_end]
-            data["Genus Match Hits"].append(genus_match_hits)
-    
-            genus_match_hits_p_index_start = genus_match_hits_index_end + 1
-            genus_match_hits_p_index_end = tophits[th_genus_match_hits_index].find(")")
-            genus_match_hits_p = tophits[th_genus_match_hits_index][genus_match_hits_p_index_start:genus_match_hits_p_index_end]
-            data["Genus Match Hits Percent"].append(genus_match_hits_p)
-    
-            th_other_genus_hits_index = index_containing_substring(tophits, "Other genus hits:")
-            other_genus_hits_index_start = tophits[th_other_genus_hits_index].find(":") + 2
-            other_genus_hits_index_end = tophits[th_other_genus_hits_index].find("(")
-            other_genus_hits = tophits[th_other_genus_hits_index][other_genus_hits_index_start:other_genus_hits_index_end]
-            data["Other Genus Hits"].append(other_genus_hits)
-    
-            other_genus_hits_p_index_start = other_genus_hits_index_end + 1
-            other_genus_hits_p_index_end = tophits[th_other_genus_hits_index].find(")")
-            other_genus_hits_p = tophits[th_other_genus_hits_index][other_genus_hits_p_index_start:other_genus_hits_p_index_end]
-            data["Other Genus Hits Percent"].append(other_genus_hits_p)
-    
-            th_species_match_hits_index = index_containing_substring(tophits, "Species match hits:")
-            species_match_hits_index_start = tophits[th_species_match_hits_index].find(":") + 2
-            species_match_hits_index_end = tophits[th_species_match_hits_index].find("(")
-            species_match_hits = tophits[th_species_match_hits_index][species_match_hits_index_start:species_match_hits_index_end]
-            data["Species Match Hits"].append(species_match_hits)
-    
-            species_match_hits_p_index_start = species_match_hits_index_end + 1
-            species_match_hits_p_index_end = tophits[th_species_match_hits_index].find(")")
-            species_match_hits_p = tophits[th_species_match_hits_index][species_match_hits_p_index_start:species_match_hits_p_index_end]
-            data["Species Match Hits Percent"].append(species_match_hits_p)
-    
-            th_other_species_hits_index = index_containing_substring(tophits, "Other species hits:")
-            other_species_hits_index_start = tophits[th_other_species_hits_index].find(":") + 2
-            other_species_hits_index_end = tophits[th_other_species_hits_index].find("(")
-            other_species_hits = tophits[th_other_species_hits_index][other_species_hits_index_start:other_species_hits_index_end]
-            data["Other Species Hits"].append(other_species_hits)
-    
-            other_species_hits_p_index_start = other_species_hits_index_end + 1
-            other_species_hits_p_index_end = tophits[th_other_species_hits_index].find(")")
-            other_species_hits_p = tophits[th_other_species_hits_index][other_species_hits_p_index_start:other_species_hits_p_index_end]
-            data["Other Species Hits Percent"].append(other_species_hits_p)
-    
-            # Get top 50 results
-            top_50_data = {
-                "Read Count": [],
-                "Percent Reads": [],
-                "Percent Hit Reads": [],
-                "Species": [],
-            }
-            th_top_50_index = index_containing_substring(tophits, "Top 50 species hits:") + 3
-            cur_top_50_index = th_top_50_index
-            for i in range(50):
-                try:
-                    top_50_reads_count_index_start = 0
-                    top_50_reads_count_index_end =  tophits[cur_top_50_index + i].find("	")
-                    top_50_reads_count = tophits[cur_top_50_index + i][top_50_reads_count_index_start:top_50_reads_count_index_end]
-                    top_50_data["Read Count"].append(top_50_reads_count.strip())
-        
-                    top_50_percent_reads_index_start = top_50_reads_count_index_end + 1
-                    top_50_percent_reads_index_end = tophits[cur_top_50_index + i].find("	", top_50_percent_reads_index_start)
-                    top_50_percent_reads = tophits[cur_top_50_index + i][top_50_percent_reads_index_start:top_50_percent_reads_index_end]
-                    top_50_data["Percent Reads"].append(top_50_percent_reads.strip())
-        
-                    top_50_percent_hit_reads_index_start = top_50_percent_reads_index_end + 1
-                    top_50_percent_hit_reads_index_end = tophits[cur_top_50_index + i].find("	", top_50_percent_hit_reads_index_start)
-                    top_50_percent_hit_reads = tophits[cur_top_50_index + i][top_50_percent_hit_reads_index_start:top_50_percent_hit_reads_index_end]
-                    top_50_data["Percent Hit Reads"].append(top_50_percent_hit_reads.strip())
-        
-                    top_50_species_index_start = top_50_percent_hit_reads_index_end + 1
-                    top_50_species_index_end = tophits[cur_top_50_index + i].find("	", top_50_species_index_start)
-                    top_50_species = tophits[cur_top_50_index + i][top_50_species_index_start:top_50_species_index_end]
-                    top_50_data["Species"].append(top_50_species.strip())
-                except IndexError:
+        # Parse txt contents
+        if runtype == "Illumina":
+            id_index_start = tophits[0].find(":", tophits[0].find(":") + 1) + 1
+            id_index_end = tophits[0].find("lane:") + 6
+            id = tophits[0][id_index_start:id_index_end]
+            id = id.replace(":lane:", "-")
+            data["ID"].append(id)
+        elif runtype == "PacBio":
+            id_index_start = tophits_file.find("reads") + 6
+            id_index_end = tophits_file.find(".subset")
+            id = tophits_file[id_index_start:id_index_end]
+            data["ID"].append(id)
+
+        spec_name_index_start = tophits[0].find(project) + len(project) + 1
+        spec_name_index_end = tophits[0].find(":", spec_name_index_start)
+        spec_name = tophits[0][spec_name_index_start:spec_name_index_end]
+        data["Specimen Name"].append(spec_name)
+
+        th_expected_spec_index = index_containing_substring(tophits, "Sp.Description:") # th_ indexes refer to those of tophits
+        expected_spec_index = tophits[th_expected_spec_index].find(":") + 2
+        expected_spec = tophits[th_expected_spec_index][expected_spec_index:]
+        expected_spec = expected_spec.replace("\n", "")
+        data["Expected Species"].append(expected_spec)
+
+        th_total_reads_index = index_containing_substring(tophits, "Total_reads:")
+        total_reads_index = tophits[th_total_reads_index].find(":") + 2
+        total_reads = tophits[th_total_reads_index][total_reads_index:]
+        total_reads = total_reads.replace("\n", "")
+        data["Total Reads"].append(total_reads)
+
+        th_total_reads_wh_index = index_containing_substring(tophits, "Total reads with hits:")
+        total_reads_wh_index_start = tophits[th_total_reads_wh_index].find(":") + 2
+        total_reads_wh_index_end = tophits[th_total_reads_wh_index].find("(")
+        total_reads_wh = tophits[th_total_reads_wh_index][total_reads_wh_index_start:total_reads_wh_index_end]
+        data["Total Reads With Hits"].append(total_reads_wh)
+
+        total_reads_wh_p_index_start = total_reads_wh_index_end + 1
+        total_reads_wh_p_index_end = tophits[th_total_reads_wh_index].find(")")
+        total_reads_wh_p = tophits[th_total_reads_wh_index][total_reads_wh_p_index_start:total_reads_wh_p_index_end]
+        data["Total Reads With Hits Percent"].append(total_reads_wh_p)
+
+        th_genus_match_hits_index = index_containing_substring(tophits, "Genus match hits:")
+        genus_match_hits_index_start = tophits[th_genus_match_hits_index].find(":") + 2
+        genus_match_hits_index_end = tophits[th_genus_match_hits_index].find("(")
+        genus_match_hits = tophits[th_genus_match_hits_index][genus_match_hits_index_start:genus_match_hits_index_end]
+        data["Genus Match Hits"].append(genus_match_hits)
+
+        genus_match_hits_p_index_start = genus_match_hits_index_end + 1
+        genus_match_hits_p_index_end = tophits[th_genus_match_hits_index].find(")")
+        genus_match_hits_p = tophits[th_genus_match_hits_index][genus_match_hits_p_index_start:genus_match_hits_p_index_end]
+        data["Genus Match Hits Percent"].append(genus_match_hits_p)
+
+        th_other_genus_hits_index = index_containing_substring(tophits, "Other genus hits:")
+        other_genus_hits_index_start = tophits[th_other_genus_hits_index].find(":") + 2
+        other_genus_hits_index_end = tophits[th_other_genus_hits_index].find("(")
+        other_genus_hits = tophits[th_other_genus_hits_index][other_genus_hits_index_start:other_genus_hits_index_end]
+        data["Other Genus Hits"].append(other_genus_hits)
+
+        other_genus_hits_p_index_start = other_genus_hits_index_end + 1
+        other_genus_hits_p_index_end = tophits[th_other_genus_hits_index].find(")")
+        other_genus_hits_p = tophits[th_other_genus_hits_index][other_genus_hits_p_index_start:other_genus_hits_p_index_end]
+        data["Other Genus Hits Percent"].append(other_genus_hits_p)
+
+        th_species_match_hits_index = index_containing_substring(tophits, "Species match hits:")
+        species_match_hits_index_start = tophits[th_species_match_hits_index].find(":") + 2
+        species_match_hits_index_end = tophits[th_species_match_hits_index].find("(")
+        species_match_hits = tophits[th_species_match_hits_index][species_match_hits_index_start:species_match_hits_index_end]
+        data["Species Match Hits"].append(species_match_hits)
+
+        species_match_hits_p_index_start = species_match_hits_index_end + 1
+        species_match_hits_p_index_end = tophits[th_species_match_hits_index].find(")")
+        species_match_hits_p = tophits[th_species_match_hits_index][species_match_hits_p_index_start:species_match_hits_p_index_end]
+        data["Species Match Hits Percent"].append(species_match_hits_p)
+
+        th_other_species_hits_index = index_containing_substring(tophits, "Other species hits:")
+        other_species_hits_index_start = tophits[th_other_species_hits_index].find(":") + 2
+        other_species_hits_index_end = tophits[th_other_species_hits_index].find("(")
+        other_species_hits = tophits[th_other_species_hits_index][other_species_hits_index_start:other_species_hits_index_end]
+        data["Other Species Hits"].append(other_species_hits)
+
+        other_species_hits_p_index_start = other_species_hits_index_end + 1
+        other_species_hits_p_index_end = tophits[th_other_species_hits_index].find(")")
+        other_species_hits_p = tophits[th_other_species_hits_index][other_species_hits_p_index_start:other_species_hits_p_index_end]
+        data["Other Species Hits Percent"].append(other_species_hits_p)
+
+        # Get top 50 results
+        top_50_data = {
+            "Read Count": [],
+            "Percent Reads": [],
+            "Percent Hit Reads": [],
+            "Species": [],
+        }
+
+        th_top_50_index = index_containing_substring(tophits, "Top 50 species hits:") + 3
+        cur_top_50_index = th_top_50_index
+        for i in range(50):
+            try:
+                top_50_reads_count_index_start = 0
+                top_50_reads_count_index_end =  tophits[cur_top_50_index + i].find("	")
+                top_50_reads_count = tophits[cur_top_50_index + i][top_50_reads_count_index_start:top_50_reads_count_index_end]
+                top_50_data["Read Count"].append(top_50_reads_count.strip())
+
+                top_50_percent_reads_index_start = top_50_reads_count_index_end + 1
+                top_50_percent_reads_index_end = tophits[cur_top_50_index + i].find("	", top_50_percent_reads_index_start)
+                top_50_percent_reads = tophits[cur_top_50_index + i][top_50_percent_reads_index_start:top_50_percent_reads_index_end]
+                top_50_data["Percent Reads"].append(top_50_percent_reads.strip())
+
+                top_50_percent_hit_reads_index_start = top_50_percent_reads_index_end + 1
+                top_50_percent_hit_reads_index_end = tophits[cur_top_50_index + i].find("	", top_50_percent_hit_reads_index_start)
+                top_50_percent_hit_reads = tophits[cur_top_50_index + i][top_50_percent_hit_reads_index_start:top_50_percent_hit_reads_index_end]
+                top_50_data["Percent Hit Reads"].append(top_50_percent_hit_reads.strip())
+
+                top_50_species_index_start = top_50_percent_hit_reads_index_end + 1
+                top_50_species_index_end = tophits[cur_top_50_index + i].find("	", top_50_species_index_start)
+                top_50_species = tophits[cur_top_50_index + i][top_50_species_index_start:top_50_species_index_end]
+                top_50_data["Species"].append(top_50_species.strip())
+            except IndexError:
                     break
-            df = pd.DataFrame(top_50_data)
-            df.to_csv(f"{mdg_parsed_dir}/{id}_tophits_{tophits_count}.csv", index=True)
-            tophits_count += 1
-    except FileNotFoundError:
-        print("Something went wrong with the topHits.txt file")
+        df = pd.DataFrame(top_50_data)
+        df.to_csv(f"{mdg_parsed_dir}/{id}_tophits_{tophits_count}.csv", index=True)
+        tophits_count += 1
+    except Exception as e:
+        print(e)
     return data, tophits_count
     
 # Copies runinfo.csv into the illumina folder and trims file to be read
-def generate_sample_info(dirname, mdg_parsed_dir, project, runtype):
+def generate_sample_info(path, mdg_parsed_dir, project, runtype):
     # Copy file
-    sample_info = shutil.copy(f"{dirname}/PA_Logs/runinfo.csv", mdg_parsed_dir)
+    sample_info = shutil.copy(f"{path}/PA_Logs/runinfo.csv", mdg_parsed_dir)
 
     # Create new csv file with every line after first (keep copy intact)
     with open(sample_info, 'r') as fin:
         data = fin.read().splitlines(True)
-    with open(mdg_parsed_dir + "/temp.csv", 'w') as fout:
+    with open(f"{mdg_parsed_dir}/temp.csv", 'w') as fout:
         fout.writelines(data[1:])
 
     # Rename cleaned file, remove copy
-    clean_data = mdg_parsed_dir + "/runinfo_clean.csv"
-    os.replace(mdg_parsed_dir + "/temp.csv", clean_data)
+    clean_data = f"{mdg_parsed_dir}/runinfo_clean.csv"
+    os.replace(f"{mdg_parsed_dir}/temp.csv", clean_data)
     os.remove(sample_info)
 
     # Processing
@@ -324,23 +329,23 @@ def generate_sample_info(dirname, mdg_parsed_dir, project, runtype):
     df.to_csv(clean_data)
 
 # Copies trimming.logs.csv into the illumina folder and trims file to be read
-def generate_read_stats(dirname, mdg_parsed_dir, project, runtype):
+def generate_read_stats(path, mdg_parsed_dir, project, runtype):
     if runtype == "Illumina":
-        generate_illumina_read_stats(dirname, mdg_parsed_dir, project)
+        generate_illumina_read_stats(path, mdg_parsed_dir, project)
     elif runtype == "PacBio":
-        generate_pacBio_read_stats(dirname, mdg_parsed_dir, project)
+        generate_pacBio_read_stats(path, mdg_parsed_dir, project)
 
-def generate_pacBio_read_stats(dirname, mdg_parsed_dir, project):
+def generate_pacBio_read_stats(path, mdg_parsed_dir, project):
     # Find HiFi Stats
     splitIndex = None
 
-    with open (f"{dirname}/PA_Logs/run_stats.csv", "r") as input:
+    with open (f"{path}/PA_Logs/run_stats.csv", "r") as input:
         for i, line in enumerate(input):
             if line.find("HiFi Stats:") != -1:
                 splitIndex = i
 
-    pf_df = pd.read_csv(f"{dirname}/PA_Logs/run_stats.csv", header=2 ,skiprows= lambda x: x >= splitIndex)
-    hifi_df = pd.read_csv(f"{dirname}/PA_Logs/run_stats.csv", header = splitIndex + 1)
+    pf_df = pd.read_csv(f"{path}/PA_Logs/run_stats.csv", header=2 ,skiprows= lambda x: x >= splitIndex)
+    hifi_df = pd.read_csv(f"{path}/PA_Logs/run_stats.csv", header = splitIndex + 1)
 
     # Drop rows for different projects
     pf_df.drop(pf_df[pf_df["Project"] != project].index, inplace=True)
@@ -349,13 +354,13 @@ def generate_pacBio_read_stats(dirname, mdg_parsed_dir, project):
     pf_df.to_csv(f"{mdg_parsed_dir}/pf_polymerase_read_stats.csv")
     hifi_df.to_csv(f"{mdg_parsed_dir}/hifi_stats.csv")
 
-def generate_illumina_read_stats(dirname, mdg_parsed_dir, project):
+def generate_illumina_read_stats(path, mdg_parsed_dir, project):
     # Copy file
-    read_stats = shutil.copy(f"{dirname}/PA_Logs/trimming.logs.csv", mdg_parsed_dir)
+    read_stats = shutil.copy(f"{path}/PA_Logs/trimming.logs.csv", mdg_parsed_dir)
 
     # Remove all lines of csv that don't include project name
     with open(read_stats, "r") as input:
-        with open(mdg_parsed_dir + "/temp.csv", "w") as output:
+        with open(f"{mdg_parsed_dir}/temp.csv", "w") as output:
             # iterate all lines from file
             for i, line in enumerate(input):
                 # find all lines w/ project name and header row
@@ -363,8 +368,8 @@ def generate_illumina_read_stats(dirname, mdg_parsed_dir, project):
                     output.write(line)
             
     # Generate cleaned file, remove copy
-    clean_data = mdg_parsed_dir + "/trimming.logs_clean.csv"
-    os.replace(mdg_parsed_dir + "/temp.csv", clean_data)
+    clean_data = f"{mdg_parsed_dir}/trimming.logs_clean.csv"
+    os.replace(f"{mdg_parsed_dir}/temp.csv", clean_data)
     os.remove(read_stats)
 
     # Rename columns
@@ -375,15 +380,15 @@ def generate_illumina_read_stats(dirname, mdg_parsed_dir, project):
     df.to_csv(clean_data)
 
 # Copies plots to illumina folder
-def copy_plots(dirname, mdg_parsed_dir, project, runtype):
+def copy_plots(path, mdg_parsed_dir, project, runtype):
     if (runtype == "Illumina"):
-        copy_illumina_plots(dirname, mdg_parsed_dir)
+        copy_illumina_plots(path, mdg_parsed_dir)
     elif(runtype == "PacBio"):
-        copy_pacBio_plots(dirname, mdg_parsed_dir, project)
+        copy_pacBio_plots(path, mdg_parsed_dir, project)
 
-def copy_pacBio_plots(dirname, mdg_parsed_dir, project):
-    cell = get_cell(dirname, project)
-    image_dir = f"{dirname}/1_{cell}/Filter/dataset-reports/reports"
+def copy_pacBio_plots(path, mdg_parsed_dir, project):
+    cell = get_cell(path, project)
+    image_dir = f"{path}/1_{cell}/Filter/dataset-reports/reports"
     images_to_copy = [
     "hexbin_length_plot.png",
     "base_yield_plot.png",
@@ -398,7 +403,7 @@ def copy_pacBio_plots(dirname, mdg_parsed_dir, project):
     "5mc_detections_hist.png",
     ]
     try:
-        os.makedirs(mdg_parsed_dir + "/images")
+        os.makedirs(f"{mdg_parsed_dir}/images")
         print(f"Nested directories '{mdg_parsed_dir}/images' created successfully.")
     except FileExistsError:
         print(f"Existing directory '{mdg_parsed_dir}/images' overwritten.")
@@ -410,15 +415,15 @@ def copy_pacBio_plots(dirname, mdg_parsed_dir, project):
     for image in images_to_copy:
         shutil.copy(f"{image_dir}/{image}", f"{mdg_parsed_dir}/images")
 
-def copy_illumina_plots(dirname, mdg_parsed_dir):
+def copy_illumina_plots(path, mdg_parsed_dir):
     # Get runinfo.csv
-    runinfo_df = pd.read_csv(f"{dirname}/PA_Logs/runinfo.csv", header=1)
+    runinfo_df = pd.read_csv(f"{path}/PA_Logs/runinfo.csv", header=1)
 
     lanes = runinfo_df["lane"]
     unique_lanes = np.unique(lanes)
 
     # Get list of all images to copy
-    image_dir = f"{dirname}/PA_Logs/images/"
+    image_dir = f"{path}/PA_Logs/images/"
     images_in_dir = os.listdir(image_dir)
     images_to_copy = []
 
@@ -429,7 +434,7 @@ def copy_illumina_plots(dirname, mdg_parsed_dir):
     
     # Create images directory
     try:
-        os.makedirs(mdg_parsed_dir + "/images")
+        os.makedirs(f"{mdg_parsed_dir}/images")
         print(f"Nested directories '{mdg_parsed_dir}/images' created successfully.")
     except FileExistsError:
         print(f"Existing directory '{mdg_parsed_dir}/images' overwritten.")
@@ -438,29 +443,48 @@ def copy_illumina_plots(dirname, mdg_parsed_dir):
     except Exception as e:
         print(f"An error occurred: {e}")
     for image in images_to_copy:
-        shutil.copy(f"{dirname}/PA_Logs/images/{image}", mdg_parsed_dir + "/images")
+        shutil.copy(f"{path}/PA_Logs/images/{image}", f"{mdg_parsed_dir}/images")
 
-def parse_work_order_info(dirname, project, mdg_parsed_dir, runtype):
+def parse_work_order_info(path, project, mdg_parsed_dir, runtype):
     try:
-        df = pd.read_csv(f"{dirname}/PA_Logs/runinfo.tmp")
+        df = pd.read_csv(f"{path}/PA_Logs/runinfo.tmp")
     except(FileNotFoundError):
-        df = pd.read_csv(f"{dirname}/PA_Logs/runinfo.tmp.org")
+        df = pd.read_csv(f"{path}/PA_Logs/runinfo.tmp.org")
 
     df = df[["Work Order", "WO PI", "WO Submitter", "WO Additional Contact(s)", "WO Billing Contact", "Quote Number"]]
     if runtype == "PacBio":
       df = df[df["Work Order"].str.find(project) != -1]  
     
-    work_order_info = mdg_parsed_dir + "/work_order_info.csv"
+    work_order_info = f"{mdg_parsed_dir}/work_order_info.csv"
     df.to_csv(work_order_info, index=False)
 
+def move_module_files(path, mdg_parsed_dir, unaligned_folder):
+    # Get trimmomatic files
+    try:
+        shutil.copy(f"{path}/{unaligned_folder}/TMP/adaptor_trimming_logs/sample.adap_trim.err", mdg_parsed_dir)
+    except Exception as e:
+        print(e)
+    # Get cutadapt files
+    try:
+        cutadapt_dir = f"{path}/{unaligned_folder}/TMP/adaptor_trimming_logs"
+        for file in os.listdir(cutadapt_dir):
+            if file.endswith(".cutadapt.log"):
+                shutil.copy(f"{path}/{unaligned_folder}/TMP/adaptor_trimming_logs/{file}", f"{mdg_parsed_dir}/{file}.json")
+    except Exception as e:
+        print(e)
+    # Get bcl2fastq files
+    try:
+        shutil.copy(f"{path}/{unaligned_folder}/Stats/Stats.json", mdg_parsed_dir)
+    except Exception as e:
+        print(e)
 def index_containing_substring(the_list, substring):
     for i, s in enumerate(the_list):
         if substring in s:
               return i
-    return -1
+    raise ValueError(f"{substring} not found")
 
-def get_cell(dirname, project):
-    df = pd.read_csv(f"{dirname}/PA_Logs/runinfo.csv", header=1)
+def get_cell(path, project):
+    df = pd.read_csv(f"{path}/PA_Logs/runinfo.csv", header=1)
     line = df[df["project"] == project].index[0]
     return df.loc[line, "cell"]
 

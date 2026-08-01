@@ -1,21 +1,20 @@
 import yaml
-import sys
 import os
 import pandas as pd
 import numpy as np
-import fnmatch
 
-project : str = ""
-path : str = ""
+#TODO: generate in PA_Logs/mdg-reports/[PROJECT]/[REPORT_FILES]
+
 top_hits_fields : list[str] = []
 lane_image_fields : list[str] = []
 lane_image_fn : list[str] = []
 plot_field_and_image_dict : dict = {}
 
-def generate_config(p_path : str, p_project : str, p_runtype : str):
+def generate_config(p_path : str, p_project : str, p_runtype : str, p_unaligned_folder : str):
     project = p_project
     path  = p_path
     runtype = p_runtype
+    unaligned_folder = p_unaligned_folder
     config_data = {
         "title": "Illumina Run Report" if runtype == "Illumina" else "PacBio Run Report",
         # report header info?
@@ -27,11 +26,11 @@ def generate_config(p_path : str, p_project : str, p_runtype : str):
         "template_dark_mode": False,
         "custom_favicon": "assets/md-genomics-2.png",
         "ignore_images": False,
-        "custom_data": get_custom_data(path, project, runtype),
+        "custom_data": get_custom_data(path, project, runtype, unaligned_folder),
         "sp": get_search_path(runtype),
         "report_section_order": get_report_section_order(runtype),
         "custom_content": {
-            "order": ["work_order_info", "sequencing_results", 
+            "order": ["work_order_info", "sequencing_results", "read_stats_parent", "sequencing_plots",
                       "mdg_processing_and_qc", "megablast_qc_parent", "secondary_analysis"]
         },
         "module_order": ["work_order_info", "sequencing_results", "bcl2fastq", "fastqc", "cutadapt",
@@ -43,7 +42,7 @@ def generate_config(p_path : str, p_project : str, p_runtype : str):
     with open(f'multiqc_config_{project}.yaml', 'w') as file:
         yaml.dump(config_data, file)
 
-def get_custom_data(path, project, runtype) -> dict:
+def get_custom_data(path, project, runtype, unaligned_folder) -> dict:
     custom_data = {
         "mdg_processing_and_qc": {
             "section_name": "MDG Processing and QC",
@@ -57,10 +56,16 @@ def get_custom_data(path, project, runtype) -> dict:
             "plot_type": "html",
             "data": "<p><p>"
         },
+        "sequencing_results": {
+            "section_name": "Sequencing Results",
+            "description": "",
+            "plot_type": "html",
+            "data": "<p><p>",
+        },
         "sequencing_info": {
             "section_name": "Sequencing Info",
             "parent_id": "sequencing_results",
-            "parent_name": "Sequencing Results"
+            "parent_name": "Sequencing Results",
         },
         "flow_cell_metrics": {
             "section_name": "Flow Cell Metrics",
@@ -99,7 +104,7 @@ def get_custom_data(path, project, runtype) -> dict:
 
     # Add top hits tables (Contingent on Illumina Parser running first)
     if runtype == "Illumina":
-        all_tophits = f"{path}/Unaligned_8bp/QA/Project_{project}/MDG_Run_Parsed_Files/all_tophits.csv"
+        all_tophits = f"{path}/{unaligned_folder}/QA/Project_{project}/MDG_Run_Parsed_Files/all_tophits.csv"
     elif runtype == "PacBio":
         all_tophits = f"{path}/Project_{project}_MDG_Run_Parsed_Files/all_tophits.csv"
     df = pd.read_csv(all_tophits)
@@ -139,16 +144,17 @@ def get_custom_data(path, project, runtype) -> dict:
                         case "q-heat-map.png":
                             field = f"lane_{lane}_q_heat_map"
                             section_name = f"Lane {lane} Q Heat Map"
-                    temp_dict = {
-                        field : {
-                            "section_name": section_name,
-                            "parent_id": "sequencing_results",
-                            "parent_name": "Sequencing Results",
+                    if field != None and section_name != None:
+                        temp_dict = {
+                            field : {
+                                "section_name": section_name,
+                                "parent_id": "sequencing_plots",
+                                "parent_name": "Sequencing Plots",
+                            }
                         }
-                    }
-                    custom_data.update(temp_dict)
-                    lane_image_fields.append(field)
-                    lane_image_fn.append(f"_{lane}_" + image_type)
+                        custom_data.update(temp_dict)
+                        lane_image_fields.append(field)
+                        lane_image_fn.append(f"_{lane}_{image_type}")
     elif runtype == "PacBio":
         plots = {
             "hexbin_length_plot": "Hexbin Length Plot",
@@ -167,14 +173,14 @@ def get_custom_data(path, project, runtype) -> dict:
             temp_dict = {
                 key: {
                     "section_name": value,
-                    "parent_id": "sequencing_results",
-                    "parent_name": "Sequencing Results",
+                    "parent_id": "sequencing_plots",
+                    "parent_name": "Sequencing Plots",
                 }
             }
             custom_data.update(temp_dict)
         plot_fields = list(plots.keys())
         plot_files = list(plots.keys())
-        plot_files[plot_files.index("ccs_readlength_qv_hist2d")] += "hexbin"
+        plot_files[plot_files.index("ccs_readlength_qv_hist2d")] += ".hexbin"
         for i in range(len(plot_files)):
             plot_files[i] += ".png"
         plot_dict = dict(zip(plot_fields, plot_files))
@@ -249,7 +255,6 @@ def get_report_section_order(runtype):
         },
         "sequencing_info": {
             "after": "read_stats",
-            #"before": "flow_cell_metrics"
         },
         "flow_cell_metrics": {
             "after": "sequencing_info",
@@ -296,11 +301,3 @@ def get_lanes(path):
     lanes = runinfo_df["lane"]
     unique_lanes = np.unique(lanes)
     return unique_lanes
-
-def find_all(pattern, path):
-    result = []
-    for root, dirs, files in os.walk(path):
-        for name in files:
-            if fnmatch.fnmatch(name, pattern):
-                result.append(name)
-    return result

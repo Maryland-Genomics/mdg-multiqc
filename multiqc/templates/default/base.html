@@ -56,11 +56,20 @@ http://multiqc.info
     <div class="toast-body"></div>
   </div>
   <script>
-    // Reorder modules
-    // Navbar
+    /*
+          Steps:
+          - Establish which submodules go where (eventually via config file)
+          - Make each of those submodules children of the larger sections, add proper indents
+          - Place them in the correct order
+          - 
+        */
+
     nav = document.getElementsByClassName("mqc-nav")[0]
+
+    workOrderInfoDict = {}
     sequencingResultsDict = {
-      "read_stats_parent": "Read Stats"
+      "read_stats_parent": "Read Stats",
+      "sequencing_plots": "Sequencing Plots"
     }
     mdgProcessingDict = {
       "bcl2fastq": "bcl2fastq",
@@ -74,66 +83,39 @@ http://multiqc.info
       "spaceranger": "Space Ranger",
     }
 
-    //sections that must be reordered
-    analysisNavSection = null
-    megaBlastNavSection = null
-    readStatsNavSection = null
-    mdgProcessingNavSection = null
-
-    nav.querySelectorAll("li").forEach(li => {
-      if (li.querySelector("a").innerHTML.includes("Secondary Analysis"))
-        analysisNavSection = li
-      if (li.querySelector("a").innerHTML.includes("MegaBlast QC"))
-        megaBlastNavSection = li
-      if (li.querySelector("a").innerHTML.includes("Read Stats") && readStatsNavSection == null)
-        readStatsNavSection = li
-      if (li.querySelector("a").innerHTML.includes("MDG Processing and QC"))
-        mdgProcessingNavSection = li
-    })
-
-    //reorder secondary analysis
-    for (const [key, value] of Object.entries(mdgProcessingDict)) {
-      nav.querySelectorAll("li").forEach(li => {
-        if (li.querySelector("a").innerHTML.includes(value)) {
-          nav.insertBefore(li, analysisNavSection)
-        }
-      })
-    }
-
-    //reorder megablast
-    if (megaBlastNavSection != null) {
-      for (const [key, value] of Object.entries(mdgProcessingDict)) {
-        nav.querySelectorAll("li").forEach(li => {
-          if (li.querySelector("a").innerHTML.includes(value)) {
-            nav.insertBefore(li, megaBlastNavSection)
-          }
-        })
-      }
-    }
-
-    //reorder read stats
-    if (readStatsNavSection != null) {
-      console.log("hit")
-      nav.insertBefore(readStatsNavSection, mdgProcessingNavSection)
-    }
-
-
-    nav.querySelectorAll("li").forEach(li => {
-      console.log(li)
-    })
-
+    workOrderArray = []
     sequencingArray = []
     processingArray = []
     analysisArray = []
+
+    workOrderInfoNavSection = null //contains all modules in these sections
+    sequencingResultsNavSection = null
+    mdgProcessingNavSection = null
+    secondaryAnalysisNavSection = null
+
+    nav.querySelectorAll("li").forEach(li => {
+      if (li.querySelector("a").textContent == "Work Order Information")
+        workOrderInfoNavSection = li
+      if (li.querySelector("a").textContent == "Sequencing Results")
+        sequencingResultsNavSection = li
+      if (li.querySelector("a").textContent == "MDG Processing and QC")
+        mdgProcessingNavSection = li
+      if (li.querySelector("a").textContent == "Secondary Analysis")
+        secondaryAnalysisNavSection = li
+    })
 
     // Get all MDG Processing and QC and Analysis nav modules
     document.querySelectorAll(".mqc-nav > li").forEach(li => {
       const asub = li.querySelector("a")
 
+      var inWorkOrderNav = false
       var inSequencingNav = false
       var inProcessingNav = false
       var inAnalysisNav = false
 
+      for (const [key, value] of Object.entries(workOrderInfoDict)) {
+        inWorkOrderNav = asub.innerHTML.includes(value) ? true : inSequencingNav
+      }
       for (const [key, value] of Object.entries(sequencingResultsDict)) {
         inSequencingNav = asub.innerHTML.includes(value) ? true : inSequencingNav
       }
@@ -144,96 +126,125 @@ http://multiqc.info
         inAnalysisNav = asub.innerHTML.includes(value) ? true : inAnalysisNav
       }
 
-      if (inSequencingNav || inProcessingNav || inAnalysisNav) {
+      if (inWorkOrderNav || inSequencingNav || inProcessingNav || inAnalysisNav) {
         asub.textContent = "⠀" + asub.textContent // Add an indent
         lisub = li.querySelector("ul").querySelectorAll("li")
         lisub.forEach(x => {
           x.querySelector("a").textContent = "⠀⠀" + x.querySelector("a").textContent
         })
 
-        if (inSequencingNav) sequencingArray.push(li)
-        if (inProcessingNav) processingArray.push(li)
-        if (inAnalysisNav) analysisArray.push(li)
+        if (inWorkOrderNav) {
+          workOrderArray.push(li)
+          workOrderInfoNavSection.appendChild(li)
+        }
+        if (inSequencingNav) {
+          sequencingArray.push(li)
+          sequencingResultsNavSection.appendChild(li)
+        }
+        if (inProcessingNav) {
+          processingArray.push(li)
+          mdgProcessingNavSection.appendChild(li)
+        }
+        if (inAnalysisNav) {
+          analysisArray.push(li)
+          secondaryAnalysisNavSection.appendChild(li)
+        }
 
         li.style.display = "none" // default to hiding
       }
     })
 
-    document.querySelectorAll(".mqc-nav > li").forEach(li => { // Get all children of navbar
-      const sub = li.querySelector("ul"); // Get the list elements of each child
+    nav.querySelectorAll("ul").forEach(ul => {
+      ul.style.display = "none" // hide all sublists by default
+    })
 
-      const a = li.querySelector(":scope > a");
-      if (sub) { sub.style.display = "none"; }
+    // Reorder nav
+    nav.querySelectorAll("li").forEach(li => {
+      if (li.querySelector("a").textContent.includes("MegaBlast QC")) {
+        $(li).appendTo(mdgProcessingNavSection)
+      }
+      /*
+      if (li.querySelector("a").textContent.includes("Read Stats") && li.parentElement.tagName != "UL") {
+        $(li).insertAfter(sequencingResultsNavSection.querySelector("a"))
+      }
+      */
+    })
 
-      a.addEventListener("click", e => {
-        alternateSubModules()
-        document.querySelectorAll(".mqc-nav > li").forEach(li1 => {
-          const sub1 = li1.querySelector("ul");
-          if (!sub1) return; // nothing to do if no children
 
-          if (li !== li1) { // close all sections that aren't this one
-            if (!(li1.querySelector("a").textContent.includes("MDG Processing and QC") && processingArray.includes(li))
-              && !(li1.querySelector("a").textContent.includes("Secondary Analysis") && analysisArray.includes(li))
-              && !(li1.querySelector("a").textContent.includes("Sequencing Results") && sequencingArray.includes(li))) {
-              // Don't close parent sections if opening child sections
-              sub1.style.display = "none";
-            }
-            if (li1.querySelector("a").textContent.includes("Sequencing Results") && !sequencingArray.includes(li)) { // Hide submodules of previous section
-              sequencingArray.forEach(li2 => {
-                li2.style.display = "none"
-              })
-            }
-            if (li1.querySelector("a").textContent.includes("MDG Processing and QC") && !processingArray.includes(li)) { // Hide submodules of previous section
-              processingArray.forEach(li2 => {
-                li2.style.display = "none"
-              })
-            }
-            if (li1.querySelector("a").textContent.includes("Secondary Analysis") && !analysisArray.includes(li)) {
-              analysisArray.forEach(li2 => {
-                li2.style.display = "none"
-              })
-            }
-          }
-        });
-        if (sub) { // Hide or show children of each section based on current display status
-          sub.style.display =
-            sub.style.display === "none" ? "block" : "none";
+    MDGNavSections = [workOrderInfoNavSection, sequencingResultsNavSection, mdgProcessingNavSection, secondaryAnalysisNavSection]
+
+    nav.querySelectorAll("li").forEach(li => {
+      asub = li.querySelector("a")
+
+      asub.addEventListener("click", () => {
+        // If li is an MDG section, close all other MDG sections.
+        if (MDGNavSections.includes(li)) {
+          alternateNavSections(MDGNavSections, li)
+          alternateNavSections(workOrderArray)
+          alternateNavSections(sequencingArray)
+          alternateNavSections(processingArray)
+          alternateNavSections(analysisArray)
         }
+        // If li is a subsection, close all other subsections
+        else if (workOrderArray.includes(li)) {
+          alternateNavSections(workOrderArray, li)
+        }
+        else if (sequencingArray.includes(li)) {
+          alternateNavSections(sequencingArray, li)
+        }
+        else if (processingArray.includes(li)) {
+          alternateNavSections(processingArray, li)
+        }
+        else if (analysisArray.includes(li)) {
+          alternateNavSections(analysisArray, li)
+        }
+      })
+    })
 
-        function alternateSubModules() {
-          if (li.querySelector("a").textContent.includes("Sequencing Results")) { // Hide or show submodules
-            sequencingArray.forEach(li2 => {
-              if (li2.style.display == "none") {
-                li2.style.display = "block"
-              }
-              else {
-                li2.style.display = "none"
-              }
+    // Closes all sections in sectionToClose, then opens/closes sectionToOpen
+    function alternateNavSections(sectionsToClose = [], sectionToOpen = null) {
+      sectionsToClose.forEach(section => {
+        if (section != sectionToOpen) {
+          ul = section.querySelectorAll(":scope > ul")
+          li = section.querySelectorAll(":scope > li")
+          if (ul) {
+            ul.forEach(x => {
+              x.style.display = "none"
             })
           }
-          if (li.querySelector("a").textContent.includes("MDG Processing and QC")) { // Hide or show submodules
-            processingArray.forEach(li2 => {
-              if (li2.style.display == "none") {
-                li2.style.display = "block"
-              }
-              else {
-                li2.style.display = "none"
-              }
-            })
-          }
-          if (li.querySelector("a").textContent.includes("Secondary Analysis")) {
-            analysisArray.forEach(li2 => {
-              if (li2.style.display == "none") {
-                li2.style.display = "block"
-              }
-              else {
-                li2.style.display = "none"
-              }
+          if (li) {
+            li.forEach(x => {
+              x.style.display = "none"
             })
           }
         }
-      });
-    });
+      })
+      if (sectionToOpen) {
+        ul = sectionToOpen.querySelectorAll(":scope > ul")
+        li = sectionToOpen.querySelectorAll(":scope > li")
+        if (ul) {
+          ul.forEach(x => {
+            if (x.style.display == "none") {
+              x.style.display = "block"
+            }
+            else {
+              x.style.display = "none"
+            }
+          })
+        }
+        if (li) {
+          li.forEach(x => {
+            if (x.style.display == "none") {
+              x.style.display = "block"
+            }
+            else {
+              x.style.display = "none"
+            }
+          })
+        }
+      }
+
+    }
 
     // Hidden Top 50 hits for MDG Megablast Table
 
@@ -299,27 +310,17 @@ http://multiqc.info
     })
 
     // Reorder report content
-    content = document.getElementsByClassName("mqc-module-section")
     parent = document.getElementsByClassName("p-4 pe-5")[0]
-
-    showSequencing = true
-    showProcess = true
-    showAnalysis = true
+    content = document.getElementsByClassName("mqc-module-section")
 
     analysisReportSection = null
     megaBlastReportSection = null
-    readStatsReportSection = null
-    sequencingResultsReportSection = null
 
     Array.from(content).forEach(div => { //Find the Secondary Analysis section and megablast section
       if (div.getAttribute("id").includes("secondary_analysis"))
         analysisReportSection = div
       if (div.getAttribute("id").includes("megablast_qc"))
         megaBlastReportSection = div
-      if (div.getAttribute("id").includes("read_stats_parent"))
-        readStatsReportSection = div
-      if (div.getAttribute("id").includes("sequencing_results"))
-        sequencingResultsReportSection = div
     })
 
     for (const [key, value] of Object.entries(mdgProcessingDict)) {
@@ -340,146 +341,141 @@ http://multiqc.info
       }
     }
 
-    if (readStatsReportSection != null) {
-      parent.insertBefore(readStatsReportSection, sequencingResultsReportSection)
-      parent.insertBefore(sequencingResultsReportSection, readStatsReportSection)
-    }
 
     // Collapsible sections
     moduleSections = Array.from(document.getElementsByClassName("mqc-module-section")) //every module section
 
-    sequencingSections = []
-    processingSections = []
-    analysisSections = []
+    workOrderMDG = document.getElementById("mqc-module-section-work_order_info") //mdg header sections
+    sequencingResultsMDG = document.getElementById("mqc-module-section-sequencing_results")
+    processsingMDG = document.getElementById("mqc-module-section-mdg_processing_and_qc")
+    analysisMDG = document.getElementById("mqc-module-section-secondary_analysis")
 
-    for (const [key, value] of Object.entries(sequencingResultsDict)) {
-      moduleSections.forEach(div => {
-        if (div.getAttribute("id").includes(key)) {
-          sequencingSections.push(div)
-        }
-      })
+    workOrderSections = setUpSections(workOrderInfoDict)
+    sequencingSections = setUpSections(sequencingResultsDict)
+    processingSections = setUpSections(mdgProcessingDict)
+    analysisSections = setUpSections(secondaryAnalysisDict)
+
+    MDGSections = [workOrderSections, sequencingSections, processingSections, analysisSections]
+
+    function setUpSections(dict) {
+      sections = []
+      for (const [key, value] of Object.entries(dict)) {
+        moduleSections.forEach(div => {
+          if (div.getAttribute("id").includes(key)) {
+            sections.push(div)
+          }
+        })
+      }
+      return sections
     }
 
-    for (const [key, value] of Object.entries(mdgProcessingDict)) {
-      moduleSections.forEach(div => {
-        if (div.getAttribute("id").includes(key)) {
-          processingSections.push(div)
-        }
-      })
-    }
-
-    for (const [key, value] of Object.entries(secondaryAnalysisDict)) {
-      moduleSections.forEach(div => {
-        if (div.getAttribute("id").includes(key)) {
-          analysisSections.push(div)
-        }
-      })
-    }
-
-    collapseButton = document.getElementById("collapse_sections")
-    collapsed = false
+    // Swap out subsection headers for h7
+    headers = []
 
     moduleSections.forEach(x => {
-      header = Array.from(x.getElementsByTagName("h2"))[0] //event when click on title
+      header = Array.from(x.getElementsByTagName("h2"))[0]
+      headers.push(header)
+    })
 
-      sequencingSections.forEach(x => {
-        if (x.contains(header)) {
-          newHeader = document.createElement("h7") // replace header if in processing
-          newHeader.innerHTML = header.innerHTML
-          for (const attr of header.attributes) {
-            newHeader.setAttribute(attr.name, attr.value);
-          }
-          header.replaceWith(newHeader)
-          header = newHeader
-        }
-      })
-      processingSections.forEach(x => {
-        if (x.contains(header)) {
-          newHeader = document.createElement("h7") // replace header if in processing
-          newHeader.innerHTML = header.innerHTML
-          for (const attr of header.attributes) {
-            newHeader.setAttribute(attr.name, attr.value);
-          }
-          header.replaceWith(newHeader)
-          header = newHeader
-        }
-      })
-      analysisSections.forEach(x => {
-        if (x.contains(header)) {
-          newHeader = document.createElement("h7") // replace header if in analysis
-          newHeader.innerHTML = header.innerHTML
-          for (const attr of header.attributes) {
-            newHeader.setAttribute(attr.name, attr.value);
-          }
-          header.replaceWith(newHeader)
-          header = newHeader
-        }
-      })
+    replaceHeaders(workOrderSections)
+    replaceHeaders(sequencingSections)
+    replaceHeaders(processingSections)
+    replaceHeaders(analysisSections)
 
+    function replaceHeaders(sections) {
+      headers.forEach(header => {
+        sections.forEach(section => {
+          if (section.contains(header)) {
+            newHeader = document.createElement("h7")
+            newHeader.innerHTML = header.innerHTML
+            for (const attr of header.attributes) {
+              newHeader.setAttribute(attr.name, attr.value);
+            }
+            header.replaceWith(newHeader)
+            header = newHeader
+          }
+        })
+      })
+    }
+
+    mdgHeaders = []
+    moduleHeaders = []
+
+    moduleSections.forEach(x => {
+      header = Array.from(x.getElementsByTagName("h2"))[0]
+      if (header)
+        mdgHeaders.push(header)
+    })
+
+    moduleSections.forEach(x => {
+      header = Array.from(x.getElementsByTagName("h7"))[0]
+      if (header)
+        moduleHeaders.push(header)
+    })
+
+    // If clicking on an MDG Header, alternate all submodules and internal charts
+    mdgHeaders.forEach(header => {
       header.addEventListener("click", () => {
-        if (x.getAttribute("id").includes("general_stats")) { //special case for general stats table
-          genStatsTable = x.querySelector("[id=mqc_violintable_wrapper_general_stats_table_table]")
-          if (genStatsTable.style.display == "none") {
-            genStatsTable.style.display = "block"
-          }
-          else {
-            genStatsTable.style.display = "none"
-          }
+        if (header.textContent.includes("Work Order Information")) alternateSubModules(workOrderSections, workOrderMDG)
+        else if (header.textContent.includes("Sequencing Results")) alternateSubModules(sequencingSections, sequencingResultsMDG)
+        else if (header.textContent.includes("MDG Processing and QC")) alternateSubModules(processingSections, processsingMDG)
+        else if (header.textContent.includes("Secondary Analysis")) alternateSubModules(analysisSections, analysisMDG)
+        else if (header.textContent.includes("Software Versions and Citations")) alternateSoftwareVersionsTable()
+
+        function alternateSubModules(sections, mdgSection) {
+          sections.forEach(section => {
+            if (section.style.display == "none") {
+              section.style.display = "block"
+            }
+            else {
+              section.style.display = "none"
+            }
+          })
+          internal = Array.from(mdgSection.querySelectorAll("[class^=mqc-section ]"))
+          internal.forEach(chart => {
+            if (chart.style.display == "none") {
+              chart.style.display = "block"
+            }
+            else {
+              chart.style.display = "none"
+            }
+          })
         }
-        mqcSections = Array.from(x.querySelectorAll("[class^=mqc-section ]"))
-        mqcSections.forEach(y => {
-          if (y.style.display == "none") {
-            y.style.display = "block"
-            if (y.hasAttribute("id") && y.getAttribute("id").includes("top_hits")) {
-              y.style.display = "none"
+      })
+
+      function alternateSoftwareVersionsTable() {
+        table = document.getElementById("mqc-section-wrapper-multiqc_software_versions-section-1")
+        if (table.style.display == "none") table.style.display = "block"
+        else table.style.display = "none"
+      }
+
+      header.addEventListener("mouseenter", () => {
+        // Display pointer cursor when hovering over header
+        document.body.style.cursor = "pointer"
+      })
+      header.addEventListener("mouseleave", () => {
+        // Switch to auto cursor when moving off header
+        document.body.style.cursor = "auto"
+      })
+    })
+
+    // If clicking on a module header, alternate all internal charts
+    moduleHeaders.forEach(header => {
+      header.addEventListener("click", () => {
+        id = header.getAttribute("id")
+        section = document.getElementById("mqc-module-section-" + id)
+        internal = Array.from(section.querySelectorAll("[class^=mqc-section ]"))
+        internal.forEach(chart => {
+          if (chart.style.display == "none") {
+            chart.style.display = "block"
+            if (chart.hasAttribute("id") && chart.getAttribute("id").includes("top_hits")) { // never show top hits tables
+              chart.style.display = "none"
             }
           }
           else {
-            y.style.display = "none"
+            chart.style.display = "none"
           }
         })
-        if (x.getAttribute("id").includes("sequencing_results")) {
-          if (showSequencing == false) {
-            showSequencing = true
-            sequencingSections.forEach(z => {
-              z.style.display = "block"
-            })
-          }
-          else {
-            showSequencing = false
-            sequencingSections.forEach(z => {
-              z.style.display = "none"
-            })
-          }
-        }
-        if (x.getAttribute("id").includes("mdg_processing")) {
-          if (showProcess == false) {
-            showProcess = true
-            processingSections.forEach(z => {
-              z.style.display = "block"
-            })
-          }
-          else {
-            showProcess = false
-            processingSections.forEach(z => {
-              z.style.display = "none"
-            })
-          }
-        }
-        if (x.getAttribute("id").includes("secondary_analysis")) {
-          if (showAnalysis == false) {
-            showAnalysis = true
-            analysisSections.forEach(z => {
-              z.style.display = "block"
-            })
-          }
-          else {
-            showAnalysis = false
-            analysisSections.forEach(z => {
-              z.style.display = "none"
-            })
-          }
-        }
       })
       header.addEventListener("mouseenter", () => {
         // Display pointer cursor when hovering over header
@@ -490,6 +486,9 @@ http://multiqc.info
         document.body.style.cursor = "auto"
       })
     })
+
+    collapseButton = document.getElementById("collapse_sections")
+    collapsed = false
 
     // Collapse all sections button
     collapseButton.addEventListener("click", () => {
@@ -505,12 +504,9 @@ http://multiqc.info
       }
 
       moduleSections.forEach(x => {
+
         header = Array.from(x.getElementsByTagName("h2"))[0] //event when click on title
 
-        if (x.getAttribute("id").includes("general_stats")) { //special case for general stats table
-          genStatsTable = x.querySelector("[id=mqc_violintable_wrapper_general_stats_table_table]")
-          genStatsTable.style.display = displayState
-        }
         mqcSections = Array.from(x.querySelectorAll("[class^=mqc-section ]"))
         mqcSections.forEach(y => {
           y.style.display = displayState
@@ -518,13 +514,11 @@ http://multiqc.info
             y.style.display = "none"
           }
         })
-        if (processingSections.includes(x) || analysisSections.includes(x) || sequencingSections.includes(x)) {
+
+        if (processingSections.includes(x) || analysisSections.includes(x) || sequencingSections.includes(x) || workOrderSections.includes(x)) {
           x.style.display = displayState
         }
       })
-      showProcess = !collapsed
-      showAnalysis = !collapsed
-      showSequencing = !collpased
     })
   </script>
   {% include 'foot.html' %}
