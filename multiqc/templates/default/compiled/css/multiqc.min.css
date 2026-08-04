@@ -13870,7 +13870,7 @@ g.annotation {
 
 .side-nav-logo svg {
     width: 100%;
-    height: 40px;
+    height: 60px;
 }
 
 #page_title .multiqc-logo-wrapper {
@@ -14057,19 +14057,19 @@ em {
 
 @font-face {
     font-family: "GothamPro";
-    src: url("../../../assets/GothamPro.otf");
+    src: url("assets/GothamPro.otf");
     font-weight: normal;
 }
 
 @font-face {
     font-family: "GothamPro";
-    src: url("../../../assets/GothamPro-Medium.otf");
+    src: url("assets/GothamPro-Medium.otf");
     font-weight: bold;
 }
 
 @font-face {
     font-family: "GothamPro";
-    src: url("../../../assets/GothamPro-Italic.otf");
+    src: url("assets/GothamPro-Italic.otf");
     font-weight: normal;
     font-style: italic;
 }

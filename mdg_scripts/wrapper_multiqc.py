@@ -6,7 +6,6 @@ import MultiQC_Config_Generator
 import MDG_Run_Parser
 import re
 
-# TODO: move necessary module files to directory, make config generate in run folder
 # This script calls both Illumina_files_parser and MultiQC_Config_Generator
 def main():
     parser = argparse.ArgumentParser(description="Run MultiQC and generate MDG tables/images")
@@ -39,14 +38,17 @@ def main():
         if unaligned_folder == None:
             raise FileNotFoundError("Unaligned folder was expected, but not found")
 
+    outdir = f"{path}/PA_Logs/mdg-reports/{args.project}"
+
     if not args.noregen:
-        MDG_Run_Parser.parse(path, args.project, runtype, unaligned_folder)
-        MultiQC_Config_Generator.generate_config(path, args.project, runtype, unaligned_folder)
+        MDG_Run_Parser.parse(path, args.project, runtype, unaligned_folder, outdir)
+        MultiQC_Config_Generator.generate_config(path, args.project, runtype, unaligned_folder, outdir)
+
     if not args.nomultiqc:
         if runtype == "Illumina":
-            subprocess.run(f"multiqc {path}/Unaligned_8bp/QA/Project_{args.project} --config multiqc_config_{args.project}.yaml --outdir {path}/PA_Logs/multiqc -n multiqc_{args.project} --flat --export --force", shell=True)
+            subprocess.run(f"multiqc {path}/Unaligned_8bp/QA/Project_{args.project} --config {outdir}/multiqc_config_{args.project}.yaml --outdir {outdir} -n multiqc_{args.project} --flat --export --force", shell=True)
         elif runtype == "PacBio":
-            subprocess.run(f"multiqc {path}/Project_{args.project}_MDG_Run_Parsed_Files --config multiqc_config_{args.project}.yaml --outdir {path}/PA_Logs/multiqc -n multiqc_{args.project} --flat --export --force", shell=True)
+            subprocess.run(f"multiqc {path}/Project_{args.project}_MDG_Run_Parsed_Files --config {outdir}/multiqc_config_{args.project}.yaml --outdir {outdir} -n multiqc_{args.project} --flat --export --force", shell=True)
 
 if __name__ == '__main__':
     main()

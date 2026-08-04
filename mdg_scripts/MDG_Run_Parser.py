@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import re
 
-def parse(p_path : str, p_project : str, p_runtype : str, p_unaliged_folder : str):
+def parse(p_path : str, p_project : str, p_runtype : str, p_unaliged_folder : str, p_outdir : str):
     project = p_project
     path = p_path
     runtype = p_runtype
@@ -23,12 +23,13 @@ def parse(p_path : str, p_project : str, p_runtype : str, p_unaliged_folder : st
 
 
     generate_MDG_parsed_folder(mdg_parsed_dir)
-    parse_work_order_info(path, project, mdg_parsed_dir, runtype)
+    parse_work_order_info(path, project, mdg_parsed_dir)
     generate_sample_info(path, mdg_parsed_dir, project, runtype)
     generate_read_stats(path, mdg_parsed_dir, project, runtype)
     copy_plots(path, mdg_parsed_dir, project, runtype)
     parse_megablastqc_info(path, mdg_parsed_dir, project, runtype, unaligned_folder)
     move_module_files(path, mdg_parsed_dir, unaligned_folder)
+    copy_assets(path, p_outdir)
 
     if (runtype == "Illumina"):
         parse_sequencing_info(path, mdg_parsed_dir)
@@ -73,24 +74,19 @@ def parse_sequencing_info(path, mdg_parsed_dir):
     # Assign dataFrame items
     data["Run ID"].append(info_root.find("Run").attrib.get("Id"))
     data["Instrument"].append(param_root.find("InstrumentType").text)
-    data["Flow Cell"].append(param_root.find("InstrumentSerialNumber").text)
+    if param_root.find("InstrumentSerialNumber").text == "VL00448":
+        data["Flow Cell"].append(param_root.find("FlowCellMode").text)
+    elif param_root.find("InstrumentSerialNumber").text == "LH01184":
+        data["Flow Cell"].append(param_root.find("RecipeVersion").text)
 
     # Parse run recipe to string
     run_recipe = ""
     planned_cycles = param_root.find("PlannedCycles")
-    if planned_cycles == None:
-        data["Platform"].append("PacBio")
-        planned_cycles = param_root.find("PlannedReads")
-        for i, cycle in enumerate(planned_cycles):
-            if not i == 0:
-                run_recipe += ":"
-            run_recipe += cycle.get("Cycles")
-    else:
-        data["Platform"].append("Illumina")
-        for i, cycle in enumerate(planned_cycles):
-            if not i == 0:
-                run_recipe += ":"
-            run_recipe += cycle.text
+    data["Platform"].append("Illumina")
+    for i, cycle in enumerate(planned_cycles):
+        if not i == 0:
+            run_recipe += ":"
+        run_recipe += cycle.text
     data["Run Recipe"].append(run_recipe)
 
     # Remove copies
@@ -127,6 +123,7 @@ def parse_megablastqc_info(path, mdg_parsed_dir, project, runtype, unaligned_fol
         "ID": [],
         "Specimen Name": [],
         "Expected Species": [],
+        "Contamination Status": [],
         "Total Reads": [],
         "Total Reads With Hits": [],
         "Total Reads With Hits Percent": [],
@@ -193,6 +190,12 @@ def get_tophits(data, tophits_directory, tophits_file, mdg_parsed_dir, project, 
         expected_spec = tophits[th_expected_spec_index][expected_spec_index:]
         expected_spec = expected_spec.replace("\n", "")
         data["Expected Species"].append(expected_spec)
+
+        th_contamination_status_index = index_containing_substring(tophits, "Contamination status:")
+        contaminated_status_index = tophits[th_contamination_status_index].find(":") + 2
+        contaminated_status = tophits[th_contamination_status_index][contaminated_status_index:]
+        contaminated_status = contaminated_status.replace("\n", "")
+        data["Contamination Status"].append(contaminated_status)
 
         th_total_reads_index = index_containing_substring(tophits, "Total_reads:")
         total_reads_index = tophits[th_total_reads_index].find(":") + 2
@@ -445,15 +448,25 @@ def copy_illumina_plots(path, mdg_parsed_dir):
     for image in images_to_copy:
         shutil.copy(f"{path}/PA_Logs/images/{image}", f"{mdg_parsed_dir}/images")
 
-def parse_work_order_info(path, project, mdg_parsed_dir, runtype):
+def parse_work_order_info(path, project, mdg_parsed_dir):
     try:
         df = pd.read_csv(f"{path}/PA_Logs/runinfo.tmp")
     except(FileNotFoundError):
         df = pd.read_csv(f"{path}/PA_Logs/runinfo.tmp.org")
 
     df = df[["Work Order", "WO PI", "WO Submitter", "WO Additional Contact(s)", "WO Billing Contact", "Quote Number"]]
-    if runtype == "PacBio":
-      df = df[df["Work Order"].str.find(project) != -1]  
+    df = df[df["Work Order"].str.find(project) != -1]
+    df = df.dropna(axis=0, how="all")
+
+    sample_df = pd.read_csv(f"{path}/PA_Logs/runinfo.csv", header=1)
+    try:
+        unique_lib = len(pd.unique(sample_df["library"]))
+    except:
+        unique_lib = len(pd.unique(sample_df["library_id"]))
+
+    unique_lib_arr = [unique_lib] * df.shape[0]
+    
+    df.insert(6, "Sample Count", unique_lib_arr, True)
     
     work_order_info = f"{mdg_parsed_dir}/work_order_info.csv"
     df.to_csv(work_order_info, index=False)
@@ -477,6 +490,23 @@ def move_module_files(path, mdg_parsed_dir, unaligned_folder):
         shutil.copy(f"{path}/{unaligned_folder}/Stats/Stats.json", mdg_parsed_dir)
     except Exception as e:
         print(e)
+
+def copy_assets(path, outdir):
+    try:
+        os.makedirs(f"{outdir}/assets")
+        print(f"Nested directories '{outdir}/assets' created successfully.")
+    except FileExistsError:
+        print(f"Existing directory '{outdir}/assets' overwritten.")
+    except PermissionError:
+        print(f"Permission denied: Unable to create '{outdir}/assets'.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    assets_dir = f"{os.path.dirname(os.path.realpath(__file__))}/assets"
+    files = os.listdir(assets_dir)
+    for fname in files:
+        shutil.copy(f"{assets_dir}/{fname}", f"{outdir}/assets")
+
 def index_containing_substring(the_list, substring):
     for i, s in enumerate(the_list):
         if substring in s:
@@ -493,14 +523,18 @@ def post_process_csv(mdg_parsed_dir):
         if x.endswith(".csv"):
             df = pd.read_csv(f"{mdg_parsed_dir}/{x}")
 
-            # First, drop all empty columns
+            # drop all duplicates
+            df = df.drop_duplicates()
+
+            # drop all empty columns
             df = df.dropna(axis=1, how="all")
             df = df.fillna("")
 
             # Next, modify index column
             if df.columns[0] == "Unnamed: 0":
                 df = df.rename(columns={"Unnamed: 0": "No."})
-                df["No."] += 1
+                offset = 1 - df["No."][0]
+                df["No."] += offset
             
             # Write results
             df.to_csv(f"{mdg_parsed_dir}/{x}", index=False)

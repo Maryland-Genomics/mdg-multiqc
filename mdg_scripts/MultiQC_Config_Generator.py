@@ -3,14 +3,12 @@ import os
 import pandas as pd
 import numpy as np
 
-#TODO: generate in PA_Logs/mdg-reports/[PROJECT]/[REPORT_FILES]
-
 top_hits_fields : list[str] = []
 lane_image_fields : list[str] = []
 lane_image_fn : list[str] = []
 plot_field_and_image_dict : dict = {}
 
-def generate_config(p_path : str, p_project : str, p_runtype : str, p_unaligned_folder : str):
+def generate_config(p_path : str, p_project : str, p_runtype : str, p_unaligned_folder : str, p_outdir : str):
     project = p_project
     path  = p_path
     runtype = p_runtype
@@ -26,6 +24,15 @@ def generate_config(p_path : str, p_project : str, p_runtype : str, p_unaligned_
         "template_dark_mode": False,
         "custom_favicon": "assets/md-genomics-2.png",
         "ignore_images": False,
+        "thousandsSep_format": ',',
+        "table_cond_formatting_rules": {
+            "all_columns": {
+                "green": [{"s_eq": "green"}],
+                "yellow": [{"s_eq": "yellow"}],
+                "red": [{"s_eq": "red"}],
+            }
+        },
+        "table_cond_formatting_colours": [{"green": "#4CAF50"}, {"yellow": "#FFC107"}, {"red": "#F44336"}],
         "custom_data": get_custom_data(path, project, runtype, unaligned_folder),
         "sp": get_search_path(runtype),
         "report_section_order": get_report_section_order(runtype),
@@ -36,10 +43,10 @@ def generate_config(p_path : str, p_project : str, p_runtype : str, p_unaligned_
         "module_order": ["work_order_info", "sequencing_results", "bcl2fastq", "fastqc", "cutadapt",
                          "trimmomatic", "mdg_processing_and_qc", "megablast_qc_parent", "secondary_analysis",
                          "cellranger", "spaceranger"],
-        "remove_sections": ["undetermined_by_lane"],
-        "software_versions": get_software_versions(),
+        "remove_sections": ["undetermined_by_lane", "fastqc_per_base_sequence_content"],
+        "software_versions": get_software_versions(runtype),
     }
-    with open(f'multiqc_config_{project}.yaml', 'w') as file:
+    with open(f'{p_outdir}/multiqc_config_{project}.yaml', 'w') as file:
         yaml.dump(config_data, file)
 
 def get_custom_data(path, project, runtype, unaligned_folder) -> dict:
@@ -289,10 +296,16 @@ def get_report_section_order(runtype):
             }
     return report_section_order
 
-def get_software_versions():
+def get_software_versions(runtype):
     software_versions = {
-        "MultiQC": "1.36.dev0/citePhilip Ewels, Måns Magnusson, Sverker Lundin, Max Käller, MultiQC: summarize analysis results for multiple tools and samples in a single report, Bioinformatics, Volume 32, Issue 19, October 2016, Pages 3047–3048, https://doi.org/10.1093/bioinformatics/btw354"
+        "MultiQC": "1.36.dev0/citePhilip Ewels, Måns Magnusson, Sverker Lundin, Max Käller, MultiQC: summarize analysis results for multiple tools and samples in a single report, Bioinformatics, Volume 32, Issue 19, October 2016, Pages 3047–3048, https://doi.org/10.1093/bioinformatics/btw354",
     }
+    if runtype == "Illumina":
+        temp_dict = {
+            "bcl2fastq": "2.20.0.422",
+            "Trimmomatic": "0.33",
+        }
+        software_versions.update(temp_dict)
     return software_versions
 
 def get_lanes(path):
