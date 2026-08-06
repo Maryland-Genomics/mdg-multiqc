@@ -81,6 +81,7 @@ http://multiqc.info
     secondaryAnalysisDict = {
       "cellranger": "Cell Ranger",
       "spaceranger": "Space Ranger",
+      "isoseq": "Iso-Seq"
     }
 
     workOrderArray = []
@@ -246,68 +247,73 @@ http://multiqc.info
 
     }
 
-    // Hidden Top 50 hits for MDG Megablast Table
+    try {
+      // Hidden Top 50 hits for MDG Megablast Table
 
-    var megaBlastTable = document.getElementById("megablast_qc-plot_table").getElementsByTagName("tbody")[0];
-    var topHitsTables = Array.from(document.querySelectorAll(`[id^=${"mqc-section-wrapper-top_hits_"}]`))
+      var megaBlastTable = document.getElementById("megablast_qc-plot_table").getElementsByTagName("tbody")[0];
+      var topHitsTables = Array.from(document.querySelectorAll(`[id^=${"mqc-section-wrapper-top_hits_"}]`))
 
-    // Hide all tophits nav bar boxes
-    Array.from(document.getElementsByClassName("mqc-nav")[0].getElementsByTagName("li")).forEach(x => {
-      if (Array.from(x.getElementsByTagName("a"))[0].getAttribute("href").startsWith("#top_hits_")) {
+      // Hide all tophits nav bar boxes
+      Array.from(document.getElementsByClassName("mqc-nav")[0].getElementsByTagName("li")).forEach(x => {
+        if (Array.from(x.getElementsByTagName("a"))[0].getAttribute("href").startsWith("#top_hits_")) {
+          x.style.display = "none"
+        }
+      })
+
+      // Hide all tophits tables
+      topHitsTables.forEach(x => {
         x.style.display = "none"
-      }
-    })
-
-    // Hide all tophits tables
-    topHitsTables.forEach(x => {
-      x.style.display = "none"
-    })
-
-    Array.from(megaBlastTable.getElementsByTagName("tr")).forEach((tr, index) => {
-      tr.addEventListener("click", () => {
-        // Show or hide corresponding top hits table based on it's current state
-        if (topHitsTables[index].style.display == "none") {
-          topHitsTables[index].style.display = "block"
-        }
-        else {
-          topHitsTables[index].style.display = "none"
-        }
       })
-      tr.addEventListener("mouseenter", () => {
-        // Display pointer cursor when hovering over megablast table
-        tr.style.cursor = "pointer"
+
+      Array.from(megaBlastTable.getElementsByTagName("tr")).forEach((tr, index) => {
+        tr.addEventListener("click", () => {
+          // Show or hide corresponding top hits table based on it's current state
+          if (topHitsTables[index].style.display == "none") {
+            topHitsTables[index].style.display = "block"
+          }
+          else {
+            topHitsTables[index].style.display = "none"
+          }
+        })
+        tr.addEventListener("mouseenter", () => {
+          // Display pointer cursor when hovering over megablast table
+          tr.style.cursor = "pointer"
+        })
+        tr.addEventListener("mouseleave", () => {
+          // Switch to auto cursor when moving off megablast table
+          tr.style.cursor = "auto"
+        })
       })
-      tr.addEventListener("mouseleave", () => {
-        // Switch to auto cursor when moving off megablast table
-        tr.style.cursor = "auto"
+
+      // Add show all tophits button
+      var megaBlastTable = document.getElementById("mqc_violintable_wrapper_megablast_qc-plot_table")
+      var showText = megaBlastTable.querySelector(".mqc_table_numrows_text")
+      showTopHits = false
+
+      showAllButton = document.createElement("button")
+      showAllButton.setAttribute("type", "button")
+      showAllButton.setAttribute("class", "megablast_expand_tophits btn btn-outline-secondary btn-sm")
+      showAllButton.setAttribute("data-plot-anchor", "megablast_qc-plot")
+      showAllButton.setAttribute("data-bs-toggle", "tooltip")
+      showAllButton.setAttribute("data-bs-original-title", "Expand/Collapse all tophits tables")
+      showAllButton.innerHTML = "Expand Tophits"
+
+      showText.parentElement.insertBefore(showAllButton, showText)
+
+      // Add functionality
+      showAllButton.addEventListener("click", () => {
+        showTopHits = !showTopHits
+        showAllButton.innerHTML = showTopHits ? "Collapse Tophits" : "Expand Tophits"
+        showTopHitsDisplay = showTopHits ? "block" : "none"
+
+        topHitsTables.forEach(table => {
+          table.style.display = showTopHitsDisplay
+        })
       })
-    })
-
-    // Add show all tophits button
-    var megaBlastTable = document.getElementById("mqc_violintable_wrapper_megablast_qc-plot_table")
-    var showText = megaBlastTable.querySelector(".mqc_table_numrows_text")
-    showTopHits = false
-
-    showAllButton = document.createElement("button")
-    showAllButton.setAttribute("type", "button")
-    showAllButton.setAttribute("class", "megablast_expand_tophits btn btn-outline-secondary btn-sm")
-    showAllButton.setAttribute("data-plot-anchor", "megablast_qc-plot")
-    showAllButton.setAttribute("data-bs-toggle", "tooltip")
-    showAllButton.setAttribute("data-bs-original-title", "Expand/Collapse all tophits tables")
-    showAllButton.innerHTML = "Expand Tophits"
-
-    showText.parentElement.insertBefore(showAllButton, showText)
-
-    // Add functionality
-    showAllButton.addEventListener("click", () => {
-      showTopHits = !showTopHits
-      showAllButton.innerHTML = showTopHits ? "Collapse Tophits" : "Expand Tophits"
-      showTopHitsDisplay = showTopHits ? "block" : "none"
-
-      topHitsTables.forEach(table => {
-        table.style.display = showTopHitsDisplay
-      })
-    })
+    }
+    catch (error){
+      console.log(error)
+    }
 
     // Reorder report content
     parent = document.getElementsByClassName("p-4 pe-5")[0]
@@ -520,6 +526,24 @@ http://multiqc.info
         }
       })
     })
+
+    // hide all empty mdg sections
+    if (workOrderArray.length == 0 && workOrderInfoNavSection.querySelector("ul").firstElementChild == null) {
+        workOrderInfoNavSection.style.display = "none"
+        workOrderMDG.style.display = "none"
+    }
+    if (sequencingArray.length == 0 && sequencingResultsNavSection.querySelector("ul").firstElementChild == null) {
+        sequencingResultsNavSection.style.display = "none"
+        sequencingResultsMDG.style.display = "none"
+    }
+    if (processingArray.length == 0 && mdgProcessingNavSection.querySelector("ul").firstElementChild == null) {
+        mdgProcessingNavSection.style.display = "none"
+        processsingMDG.style.display = "none"
+    }
+    if (analysisArray.length == 0 && secondaryAnalysisNavSection.querySelector("ul").firstElementChild == null) {
+        secondaryAnalysisNavSection.style.display = "none"
+        analysisMDG.style.display = "none"
+    }
   </script>
   {% include 'foot.html' %}
 </body>

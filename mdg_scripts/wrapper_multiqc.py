@@ -5,6 +5,7 @@ import os
 import MultiQC_Config_Generator
 import MDG_Run_Parser
 import re
+import pandas as pd
 
 # This script calls both Illumina_files_parser and MultiQC_Config_Generator
 def main():
@@ -22,6 +23,11 @@ def main():
     if path == "":
         path = os.path.split(args.input)[0]
         path = os.path.split(path)[1] # Get the first folder up if blank
+
+    # Check if project is valid
+    runinfo_df = pd.read_csv(f"{path}/PA_Logs/runinfo.csv", header=1)
+    if not args.project in runinfo_df["project"].values:
+        raise ValueError(f"{args.project} is not a valid project for this run folder")
 
     runtype = "Illumina"
     if path.find("R84050") != -1:

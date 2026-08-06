@@ -28,8 +28,8 @@ def parse(p_path : str, p_project : str, p_runtype : str, p_unaliged_folder : st
     generate_read_stats(path, mdg_parsed_dir, project, runtype)
     copy_plots(path, mdg_parsed_dir, project, runtype)
     parse_megablastqc_info(path, mdg_parsed_dir, project, runtype, unaligned_folder)
-    move_module_files(path, mdg_parsed_dir, unaligned_folder)
-    copy_assets(path, p_outdir)
+    move_module_files(path, project, mdg_parsed_dir, unaligned_folder, runtype)
+    copy_assets(p_outdir)
 
     if (runtype == "Illumina"):
         parse_sequencing_info(path, mdg_parsed_dir)
@@ -78,15 +78,22 @@ def parse_sequencing_info(path, mdg_parsed_dir):
         data["Flow Cell"].append(param_root.find("FlowCellMode").text)
     elif param_root.find("InstrumentSerialNumber").text == "LH01184":
         data["Flow Cell"].append(param_root.find("RecipeVersion").text)
+    data["Platform"].append("Illumina")
 
     # Parse run recipe to string
     run_recipe = ""
     planned_cycles = param_root.find("PlannedCycles")
-    data["Platform"].append("Illumina")
-    for i, cycle in enumerate(planned_cycles):
-        if not i == 0:
-            run_recipe += ":"
-        run_recipe += cycle.text
+    if planned_cycles == None:
+        planned_cycles = param_root.find("PlannedReads")
+        for i, cycle in enumerate(planned_cycles):
+            if not i == 0:
+                run_recipe += ":"
+            run_recipe += cycle.get("Cycles")
+    else:
+        for i, cycle in enumerate(planned_cycles):
+            if not i == 0:
+                run_recipe += ":"
+            run_recipe += cycle.text
     data["Run Recipe"].append(run_recipe)
 
     # Remove copies
@@ -141,26 +148,29 @@ def parse_megablastqc_info(path, mdg_parsed_dir, project, runtype, unaligned_fol
     if (runtype == "Illumina"):
         tophits_directory = f"{path}/{unaligned_folder}/QC/Project_{project}"
     elif (runtype == "PacBio"):
-        tophits_directory = f"{path}/1_{get_cell(path, project)}/hifi_reads/QC"
+        tophits_directory = f"{path}/{get_cell(path, project)}/hifi_reads/QC"
 
     tophits_count = 0
 
-    if runtype == "Illumina":
-        for sample in os.listdir(tophits_directory):
-            if sample.startswith("Sample"):
-                # Assume file called *.topHits.txt, get all files
-                for tophits_file in os.listdir(f"{tophits_directory}/{sample}/QC"):
-                    # Get all files in directory that end with topHits.txt
-                    if tophits_file.endswith("topHits.txt"):
-                        data, tophits_count = get_tophits(data, f"{tophits_directory}/{sample}/QC", tophits_file, mdg_parsed_dir, project, tophits_count, runtype)
-    elif runtype == "PacBio":
-        for tophits_file in os.listdir(tophits_directory):
-            if tophits_file.endswith("topHits.txt"):
-                data, tophits_count = get_tophits(data, tophits_directory, tophits_file, mdg_parsed_dir, project, tophits_count, runtype)
+    try:
+        if runtype == "Illumina":
+            for sample in os.listdir(tophits_directory):
+                if sample.startswith("Sample"):
+                    # Assume file called *.topHits.txt, get all files
+                    for tophits_file in os.listdir(f"{tophits_directory}/{sample}/QC"):
+                        # Get all files in directory that end with topHits.txt
+                        if tophits_file.endswith("topHits.txt"):
+                            data, tophits_count = get_tophits(data, f"{tophits_directory}/{sample}/QC", tophits_file, mdg_parsed_dir, project, tophits_count, runtype)
+        elif runtype == "PacBio":
+            for tophits_file in os.listdir(tophits_directory):
+                if tophits_file.endswith("topHits.txt"):
+                    data, tophits_count = get_tophits(data, tophits_directory, tophits_file, mdg_parsed_dir, project, tophits_count, runtype)
 
-    # Write data to new csv file
-    df = pd.DataFrame(data)
-    df.to_csv(f"{mdg_parsed_dir}/all_tophits.csv", index=True)
+        # Write data to new csv file
+        df = pd.DataFrame(data)
+        df.to_csv(f"{mdg_parsed_dir}/all_tophits.csv", index=True)
+    except Exception as e:
+        print(e)
 
 def get_tophits(data, tophits_directory, tophits_file, mdg_parsed_dir, project, tophits_count, runtype):
     try:
@@ -416,7 +426,10 @@ def copy_pacBio_plots(path, mdg_parsed_dir, project):
         print(f"An error occurred: {e}")
 
     for image in images_to_copy:
-        shutil.copy(f"{image_dir}/{image}", f"{mdg_parsed_dir}/images")
+        try:
+            shutil.copy(f"{image_dir}/{image}", f"{mdg_parsed_dir}/images")
+        except FileNotFoundError:
+            print(f"{image} not found")
 
 def copy_illumina_plots(path, mdg_parsed_dir):
     # Get runinfo.csv
@@ -471,27 +484,50 @@ def parse_work_order_info(path, project, mdg_parsed_dir):
     work_order_info = f"{mdg_parsed_dir}/work_order_info.csv"
     df.to_csv(work_order_info, index=False)
 
-def move_module_files(path, mdg_parsed_dir, unaligned_folder):
-    # Get trimmomatic files
-    try:
-        shutil.copy(f"{path}/{unaligned_folder}/TMP/adaptor_trimming_logs/sample.adap_trim.err", mdg_parsed_dir)
-    except Exception as e:
-        print(e)
-    # Get cutadapt files
-    try:
-        cutadapt_dir = f"{path}/{unaligned_folder}/TMP/adaptor_trimming_logs"
-        for file in os.listdir(cutadapt_dir):
-            if file.endswith(".cutadapt.log"):
-                shutil.copy(f"{path}/{unaligned_folder}/TMP/adaptor_trimming_logs/{file}", f"{mdg_parsed_dir}/{file}.json")
-    except Exception as e:
-        print(e)
-    # Get bcl2fastq files
-    try:
-        shutil.copy(f"{path}/{unaligned_folder}/Stats/Stats.json", mdg_parsed_dir)
-    except Exception as e:
-        print(e)
+def move_module_files(path, project, mdg_parsed_dir, unaligned_folder, runtype):
+    if runtype == "Illumina":
+        # Get trimmomatic files
+        try:
+            shutil.copy(f"{path}/{unaligned_folder}/TMP/adaptor_trimming_logs/sample.adap_trim.err", mdg_parsed_dir)
+        except Exception as e:
+            print(e)
+        # Get cutadapt files
+        try:
+            cutadapt_dir = f"{path}/{unaligned_folder}/TMP/adaptor_trimming_logs"
+            for file in os.listdir(cutadapt_dir):
+                if file.endswith(".cutadapt.log"):
+                    shutil.copy(f"{path}/{unaligned_folder}/TMP/adaptor_trimming_logs/{file}", f"{mdg_parsed_dir}/{file}.json")
+        except Exception as e:
+            print(e)
+        # Get bcl2fastq files
+        try:
+            shutil.copy(f"{path}/{unaligned_folder}/Stats/Stats.json", mdg_parsed_dir)
+        except Exception as e:
+            print(e)
+    elif runtype == "PacBio":
+        try:
+            generated = False
+            try:
+                os.makedirs(f"{mdg_parsed_dir}/isoseq")
+                print(f"Nested directories '{mdg_parsed_dir}/isoseq' created successfully.")
+                generated = True
+            except FileExistsError:
+                print(f"Existing directory '{mdg_parsed_dir}/isoseq' overwritten.")
+            except PermissionError:
+                print(f"Permission denied: Unable to create '{mdg_parsed_dir}/isoseq'.")
+            except Exception as e:
+                print(f"An error occurred: {e}")
 
-def copy_assets(path, outdir):
+            if generated:
+                report_path = f"{path}/{get_cell(path, project)}/hifi_reads/read_seg_iso_seq/cromwell_out/outputs"
+                reports = os.listdir(report_path)
+                for report in reports:
+                    if report.endswith("cluster_report.csv"):
+                        shutil.copy(f"{report_path}/{report}", f"{mdg_parsed_dir}/isoseq")
+        except Exception as e:
+            print(e)
+
+def copy_assets(outdir):
     try:
         os.makedirs(f"{outdir}/assets")
         print(f"Nested directories '{outdir}/assets' created successfully.")
@@ -516,7 +552,8 @@ def index_containing_substring(the_list, substring):
 def get_cell(path, project):
     df = pd.read_csv(f"{path}/PA_Logs/runinfo.csv", header=1)
     line = df[df["project"] == project].index[0]
-    return df.loc[line, "cell"]
+    cell = df.loc[line, "cell"]
+    return f"1_{cell}"
 
 def post_process_csv(mdg_parsed_dir):
     for x in os.listdir(mdg_parsed_dir):
