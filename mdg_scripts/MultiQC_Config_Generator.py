@@ -116,7 +116,7 @@ def get_custom_data(path, project, runtype, unaligned_folder) -> dict:
         all_tophits = f"{path}/Project_{project}_MDG_Run_Parsed_Files/all_tophits.csv"
     try:
         df = pd.read_csv(all_tophits)
-        libraries = df["ID"]
+        libraries = df["Specimen Name"]
 
         for (i, topHits) in enumerate(libraries):
             temp_dict = {

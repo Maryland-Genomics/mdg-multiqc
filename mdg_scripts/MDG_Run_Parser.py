@@ -303,7 +303,7 @@ def get_tophits(data, tophits_directory, tophits_file, mdg_parsed_dir, project, 
             except IndexError:
                     break
         df = pd.DataFrame(top_50_data)
-        df.to_csv(f"{mdg_parsed_dir}/{id}_tophits_{tophits_count}.csv", index=True)
+        df.to_csv(f"{mdg_parsed_dir}/{spec_name}_tophits_{tophits_count}.csv", index=True)
         tophits_count += 1
     except Exception as e:
         print(e)
@@ -402,7 +402,7 @@ def copy_plots(path, mdg_parsed_dir, project, runtype):
 
 def copy_pacBio_plots(path, mdg_parsed_dir, project):
     cell = get_cell(path, project)
-    image_dir = f"{path}/1_{cell}/Filter/dataset-reports/reports"
+    image_dir = f"{path}/{cell}/Filter/dataset-reports/reports"
     images_to_copy = [
     "hexbin_length_plot.png",
     "base_yield_plot.png",
@@ -523,7 +523,7 @@ def move_module_files(path, project, mdg_parsed_dir, unaligned_folder, runtype):
                 report_path = f"{path}/{get_cell(path, project)}/hifi_reads/read_seg_iso_seq/cromwell_out/outputs"
                 reports = os.listdir(report_path)
                 for report in reports:
-                    if report.endswith("cluster_report.csv"):
+                    if report.endswith(".csv") or report.endswith(".json"):
                         shutil.copy(f"{report_path}/{report}", f"{mdg_parsed_dir}/isoseq")
         except Exception as e:
             print(e)
