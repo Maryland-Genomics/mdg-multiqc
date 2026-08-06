@@ -281,7 +281,7 @@ def get_report_section_order(runtype):
     for (i, top_hits) in enumerate(top_hits_fields):
         temp_dict = {
             top_hits: {
-                "after": f"{top_hits_fields[i - 1]}" if i > 0 else "megablast_qc",
+                "order": (i + 1) * 10,
                 #"before": f"{top_hits_fields[i + 1]}" if i < (len(top_hits_fields) - 1) else ""
             }
         }
@@ -291,7 +291,7 @@ def get_report_section_order(runtype):
         for (i, lane) in enumerate(lane_image_fields):
             temp_dict = {
                 lane: {
-                    "order": (i + 1) * 100
+                    "order": (i + 1) * 10
                 }
             }
             report_section_order.update(temp_dict)
@@ -299,7 +299,7 @@ def get_report_section_order(runtype):
         for i, key in enumerate(plot_field_and_image_dict):
             temp_dict = {
                 key: {
-                    "order": (i + 1) * 100
+                    "order": (i + 1) * 10
                 }
             }
     return report_section_order

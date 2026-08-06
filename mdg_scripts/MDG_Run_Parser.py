@@ -298,6 +298,7 @@ def get_tophits(data, tophits_directory, tophits_file, mdg_parsed_dir, project, 
                 top_50_species_index_start = top_50_percent_hit_reads_index_end + 1
                 top_50_species_index_end = tophits[cur_top_50_index + i].find("	", top_50_species_index_start)
                 top_50_species = tophits[cur_top_50_index + i][top_50_species_index_start:top_50_species_index_end]
+                top_50_species = top_50_species.replace(",", " ")
                 top_50_data["Species"].append(top_50_species.strip())
             except IndexError:
                     break
