@@ -9,7 +9,7 @@ The side navigation for the report.
 <div class="side-nav-wrapper sticky-top">
   <div class="side-nav">
     <!-- Logo -->
-    <h1 class="side-nav-logo"><a href="#">{{ include_file('assets/img/MultiQC_logo.svg') }}</a></h1>
+    <h1 class="side-nav-logo"><a href="#">{{ include_file('assets/img/UM_School_Medicine_white_red_yellow.svg') }}</a></h1>
     <!-- Burger menu toggle -->
     <button
       type="button"
@@ -26,6 +26,7 @@ The side navigation for the report.
 
     <div class="collapse navbar-collapse d-md-block" id="mqc-nav-collapse">
       <!-- Version number and color mode toggle - repositions based on screen size -->
+      <!--
       <div id="mqc-nav-header" class="d-flex align-items-center justify-content-center gap-2 pb-2">
         <a
           href="https://github.com/MultiQC/MultiQC/releases/tag/v{{ config.version }}"
@@ -39,13 +40,14 @@ The side navigation for the report.
           {% include 'theme_toggle.html' %}
         {% endif %}
       </div>
+      -->
 
       {% if config.title is not none %}
         <h1 class="side-nav-title"><a href="#">{{ config.title }}</a></h1>
       {% endif %}
 
       <!-- Toolbox items for mobile navigation -->
-      <p class="mobile-nav-toolbox-btns d-md-none text-center my-1 mx-2">
+      <!-- <p class="mobile-nav-toolbox-btns d-md-none text-center my-1 mx-2">
         <a href="#mqc_cols" class="btn btn-sm btn-outline-secondary mb-2">
           {{ material_icon('mdi:pin', 18) }} Highlight
         </a>
@@ -88,7 +90,7 @@ The side navigation for the report.
         <a href="#mqc_about" class="btn btn-sm btn-outline-secondary mb-2">
           {{ material_icon('mdi:help-circle', 18) }} About
         </a>
-      </p>
+      </p> -->
 
       <ul class="mqc-nav">
         {% if not config.skip_generalstats %}

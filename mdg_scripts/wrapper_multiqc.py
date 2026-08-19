@@ -1,0 +1,60 @@
+import argparse
+import logging
+import subprocess
+import os
+import MultiQC_Config_Generator
+import MDG_Run_Parser
+import re
+import pandas as pd
+
+# This script calls both Illumina_files_parser and MultiQC_Config_Generator
+def main():
+    parser = argparse.ArgumentParser(description="Run MultiQC and generate MDG tables/images")
+    parser.add_argument('-i', '--input', metavar='', required=True, help='Path to run folder')
+    parser.add_argument('-p', '--project', metavar='', default='', required=True, help="Project which MultiQC will interpret")
+    parser.add_argument('-nr', '--noregen', action='store_true', help="Don't Regenerate Illumina Files and Config")
+    parser.add_argument('-nm', '--nomultiqc', action='store_true', help="Don't Run MultiQC")
+    args = parser.parse_args()
+
+    if not os.path.isdir(args.input):
+        raise NotADirectoryError(args.input)
+
+    path = os.path.split(args.input)[1]
+    if path == "":
+        path = os.path.split(args.input)[0]
+        path = os.path.split(path)[1] # Get the first folder up if blank
+
+    # Check if project is valid
+    runinfo_df = pd.read_csv(f"{path}/PA_Logs/runinfo.csv", header=1)
+    if not args.project in runinfo_df["project"].values:
+        raise ValueError(f"{args.project} is not a valid project for this run folder")
+
+    runtype = "Illumina"
+    if path.find("R84050") != -1:
+        runtype = "PacBio"
+
+    unaligned_folder = None
+
+    if runtype == "Illumina":
+        unaligned_pattern = re.compile("Unaligned*")
+        for filename in os.listdir(path):
+            if re.search(unaligned_pattern, filename):
+                unaligned_folder = filename
+                break
+        if unaligned_folder == None:
+            raise FileNotFoundError("Unaligned folder was expected, but not found")
+
+    outdir = f"{path}/PA_Logs/mdg-reports/{args.project}"
+
+    if not args.noregen:
+        MDG_Run_Parser.parse(path, args.project, runtype, unaligned_folder, outdir)
+        MultiQC_Config_Generator.generate_config(path, args.project, runtype, unaligned_folder, outdir)
+
+    if not args.nomultiqc:
+        if runtype == "Illumina":
+            subprocess.run(f"multiqc {path}/Unaligned_8bp/QA/Project_{args.project} --config {outdir}/multiqc_config_{args.project}.yaml --outdir {outdir} -n multiqc_{args.project} --flat --export --force", shell=True)
+        elif runtype == "PacBio":
+            subprocess.run(f"multiqc {path}/Project_{args.project}_MDG_Run_Parsed_Files --config {outdir}/multiqc_config_{args.project}.yaml --outdir {outdir} -n multiqc_{args.project} --flat --export --force", shell=True)
+
+if __name__ == '__main__':
+    main()

@@ -29,10 +29,13 @@ was generated and the button that launches the welcome tour.
       {{ '</a>' if config.custom_logo_url is not none }}
     </div>
   {% endif %}
-  <a href="http://multiqc.info" target="_blank">
-    <div class="multiqc-logo-wrapper">{{ include_file('assets/img/MultiQC_logo.svg') }}</div>
+  <a href="https://marylandgenomics.org/" target="_blank">
+    <div class="multiqc-logo-wrapper">{{ include_file('assets/img/logos_no_bg/md-genomics-stacked.svg') }}</div>
   </a>
 </h1>
+
+<div class="swoop_banner">{{ include_file('assets/img/md-swoop.svg') }}</div>
+
 {% if config.title is not none or config.subtitle is not none %}
   <h1>
     {{ config.title if config.title is not none }}
@@ -46,6 +49,10 @@ was generated and the button that launches the welcome tour.
     {{ config.intro_text if config.intro_text is not none else 'A modular tool to aggregate results from bioinformatics analyses across many samples into a single report.' }}
   </p>
 {% endif %}
+
+<div>
+    <button id="collapse_sections" class="btn-collapse-sections" type="button">Collapse All Sections</button>
+</div>
 
 {% if config.report_comment and config.report_comment | length > 0 %}
   <blockquote class="report_comment">{{ config.report_comment }}</blockquote>
@@ -167,7 +174,7 @@ was generated and the button that launches the welcome tour.
     </span>
   </p>
 {% endif %}
-
+<!---
 <div
   class="alert alert-info alert-dismissible d-print-none d-flex justify-content-between align-items-center gap-1"
   id="mqc_welcome"
@@ -184,7 +191,7 @@ was generated and the button that launches the welcome tour.
   </button>
   <button type="button" data-bs-dismiss="alert" class="btn-close" aria-label="Close"></button>
 </div>
-
+-->
 {% if report.plot_data | length > 0 and report.some_plots_are_deferred %}
   <div id="mqc-warning-many-samples" class="alert alert-warning alert-dismissible d-print-none">
     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>

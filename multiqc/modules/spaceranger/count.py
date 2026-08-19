@@ -53,6 +53,10 @@ def parse_count_html(module: BaseMultiqcModule):
             if line.startswith("const data"):
                 line = line.replace("const data = ", "")
                 summary = json.loads(line)
+                # json_out = json.dumps(summary)
+                # with open("test.json", "w") as f:
+                #    f.write(json_out)
+                #print(summary)
                 summary = summary["summary"]
                 break
 
@@ -67,13 +71,19 @@ def parse_count_html(module: BaseMultiqcModule):
         software = next(
             iter(x[1] for x in summary["summary_tab"]["pipeline_info_table"]["rows"] if x[0] == "Pipeline Version")
         )
+
+        #software = summary["tabs"]["tab_data"][0]["run_summary"]["card"]["inner"]["rows"][7]
+
         software_name, software_version = software.split("-")
+        #software_name = "spaceranger"
+        #software_version = software[1]
         module.add_software_version(version=software_version, sample=sample_name, software_name=software_name)
 
         # List of data collated from different tables in cellranger reports.
         # This is a list of Tuples (metric name, value)
         data_rows = (
             [["Number of Spots Under Tissue", summary["summary_tab"]["filtered_bcs_transcriptome_union"]["metric"]]]
+            #[["Number of Spots Under Tissue", summary["tabs"]["tab_data"]["0"]["bin_metrics"]["card"]["inner"]["rows"][1][1]]]
             + summary["summary_tab"]["cells"]["table"]["rows"]
             + summary["summary_tab"]["sequencing"]["table"]["rows"]
             + summary["summary_tab"]["mapping"]["table"]["rows"]

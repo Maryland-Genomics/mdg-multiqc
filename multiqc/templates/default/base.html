@@ -1,5 +1,5 @@
 {# #######################
-  base.html
+base.html
 ##########################
 
 This is the base file for the report. This is kept as a bare skeleton and
@@ -10,10 +10,12 @@ specified in __init__.py, eg:
 
 template_fn = 'base.html'
 
-#}<!doctype html>
+#}
+<!doctype html>
 <html lang="en">
-  <head>
-    <!--
+
+<head>
+  <!--
   __  __       _ _   _  ___   ____
  |  \/  |_   _| | |_(_)/ _ \ / ___|
  | |\/| | | | | | __| | | | | |
@@ -24,37 +26,526 @@ Abandon hope all ye who enter here..
 http://multiqc.info
 -->
 
-    {% include 'head.html' %}
-    {% include 'includes.html' %}
-  </head>
-  <body>
-    {% include 'nav.html' %}
-    {% include 'toolbox.html' %}
+  {% include 'head.html' %}
+  {% include 'includes.html' %}
+</head>
 
-    <div class="mainpage">
-      <div class="p-4 pe-5">
-        {% include 'header.html' %}
-        {% include 'general_stats.html' %}
-        {% include 'content.html' %}
-      </div>
-      <div class="footer border-top py-3 mt-5">
-        <div class="container-fluid">{% include 'footer.html' %}</div>
-      </div>
+<body>
+  {% include 'nav.html' %}
+
+
+  <div class="mainpage">
+    <div class="p-4 pe-5">
+      {% include 'header.html' %}
+      {% include 'general_stats.html' %}
+      {% include 'content.html' %}
     </div>
 
-    <!-- Bootstrap Toast Container -->
-    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-container"></div>
+  </div>
 
-    <!-- Toast Template (hidden) -->
-    <div class="toast d-none" id="toast-template" role="alert" aria-live="assertive" aria-atomic="true">
-      <div class="toast-header">
-        <span class="me-2 toast-icon"></span>
-        <strong class="me-auto toast-heading"></strong>
-        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-      </div>
-      <div class="toast-body"></div>
+  <!-- Bootstrap Toast Container -->
+  <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-container"></div>
+
+  <!-- Toast Template (hidden) -->
+  <div class="toast d-none" id="toast-template" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header">
+      <span class="me-2 toast-icon"></span>
+      <strong class="me-auto toast-heading"></strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
     </div>
+    <div class="toast-body"></div>
+  </div>
+  <script>
+    /*
+          Steps:
+          - Establish which submodules go where (eventually via config file)
+          - Make each of those submodules children of the larger sections, add proper indents
+          - Place them in the correct order
+          - 
+        */
 
-    {% include 'foot.html' %}
-  </body>
+    nav = document.getElementsByClassName("mqc-nav")[0]
+
+    workOrderInfoDict = {}
+    sequencingResultsDict = {
+      "read_stats_parent": "Read Stats",
+      "sequencing_plots": "Sequencing Plots"
+    }
+    mdgProcessingDict = {
+      "bcl2fastq": "bcl2fastq",
+      "fastqc": "FastQC",
+      "cutadapt": "Cutadapt",
+      "trimmomatic": "Trimmomatic",
+      "megablast_qc_parent": "MegaBlast QC"
+    }
+    secondaryAnalysisDict = {
+      "cellranger": "Cell Ranger",
+      "spaceranger": "Space Ranger",
+      "isoseq": "Iso-Seq"
+    }
+
+    workOrderArray = []
+    sequencingArray = []
+    processingArray = []
+    analysisArray = []
+
+    workOrderInfoNavSection = null //contains all modules in these sections
+    sequencingResultsNavSection = null
+    mdgProcessingNavSection = null
+    secondaryAnalysisNavSection = null
+
+    nav.querySelectorAll("li").forEach(li => {
+      if (li.querySelector("a").textContent == "Work Order Information")
+        workOrderInfoNavSection = li
+      if (li.querySelector("a").textContent == "Sequencing Results")
+        sequencingResultsNavSection = li
+      if (li.querySelector("a").textContent == "MDG Processing and QC")
+        mdgProcessingNavSection = li
+      if (li.querySelector("a").textContent == "Secondary Analysis")
+        secondaryAnalysisNavSection = li
+    })
+
+    // Get all MDG Processing and QC and Analysis nav modules
+    document.querySelectorAll(".mqc-nav > li").forEach(li => {
+      const asub = li.querySelector("a")
+
+      var inWorkOrderNav = false
+      var inSequencingNav = false
+      var inProcessingNav = false
+      var inAnalysisNav = false
+
+      for (const [key, value] of Object.entries(workOrderInfoDict)) {
+        inWorkOrderNav = asub.innerHTML.includes(value) ? true : inSequencingNav
+      }
+      for (const [key, value] of Object.entries(sequencingResultsDict)) {
+        inSequencingNav = asub.innerHTML.includes(value) ? true : inSequencingNav
+      }
+      for (const [key, value] of Object.entries(mdgProcessingDict)) {
+        inProcessingNav = asub.innerHTML.includes(value) ? true : inProcessingNav
+      }
+      for (const [key, value] of Object.entries(secondaryAnalysisDict)) {
+        inAnalysisNav = asub.innerHTML.includes(value) ? true : inAnalysisNav
+      }
+
+      if (inWorkOrderNav || inSequencingNav || inProcessingNav || inAnalysisNav) {
+        asub.textContent = "⠀" + asub.textContent // Add an indent
+        lisub = li.querySelector("ul").querySelectorAll("li")
+        lisub.forEach(x => {
+          x.querySelector("a").textContent = "⠀⠀" + x.querySelector("a").textContent
+        })
+
+        if (inWorkOrderNav) {
+          workOrderArray.push(li)
+          workOrderInfoNavSection.appendChild(li)
+        }
+        if (inSequencingNav) {
+          sequencingArray.push(li)
+          sequencingResultsNavSection.appendChild(li)
+        }
+        if (inProcessingNav) {
+          processingArray.push(li)
+          mdgProcessingNavSection.appendChild(li)
+        }
+        if (inAnalysisNav) {
+          analysisArray.push(li)
+          secondaryAnalysisNavSection.appendChild(li)
+        }
+
+        li.style.display = "none" // default to hiding
+      }
+    })
+
+    nav.querySelectorAll("ul").forEach(ul => {
+      ul.style.display = "none" // hide all sublists by default
+    })
+
+    // Reorder nav
+    nav.querySelectorAll("li").forEach(li => {
+      if (li.querySelector("a").textContent.includes("MegaBlast QC")) {
+        $(li).appendTo(mdgProcessingNavSection)
+      }
+      /*
+      if (li.querySelector("a").textContent.includes("Read Stats") && li.parentElement.tagName != "UL") {
+        $(li).insertAfter(sequencingResultsNavSection.querySelector("a"))
+      }
+      */
+    })
+
+
+    MDGNavSections = [workOrderInfoNavSection, sequencingResultsNavSection, mdgProcessingNavSection, secondaryAnalysisNavSection]
+
+    nav.querySelectorAll("li").forEach(li => {
+      asub = li.querySelector("a")
+
+      asub.addEventListener("click", () => {
+        // If li is an MDG section, close all other MDG sections.
+        if (MDGNavSections.includes(li)) {
+          alternateNavSections(MDGNavSections, li)
+          alternateNavSections(workOrderArray)
+          alternateNavSections(sequencingArray)
+          alternateNavSections(processingArray)
+          alternateNavSections(analysisArray)
+        }
+        // If li is a subsection, close all other subsections
+        else if (workOrderArray.includes(li)) {
+          alternateNavSections(workOrderArray, li)
+        }
+        else if (sequencingArray.includes(li)) {
+          alternateNavSections(sequencingArray, li)
+        }
+        else if (processingArray.includes(li)) {
+          alternateNavSections(processingArray, li)
+        }
+        else if (analysisArray.includes(li)) {
+          alternateNavSections(analysisArray, li)
+        }
+      })
+    })
+
+    // Closes all sections in sectionToClose, then opens/closes sectionToOpen
+    function alternateNavSections(sectionsToClose = [], sectionToOpen = null) {
+      sectionsToClose.forEach(section => {
+        if (section != sectionToOpen) {
+          ul = section.querySelectorAll(":scope > ul")
+          li = section.querySelectorAll(":scope > li")
+          if (ul) {
+            ul.forEach(x => {
+              x.style.display = "none"
+            })
+          }
+          if (li) {
+            li.forEach(x => {
+              x.style.display = "none"
+            })
+          }
+        }
+      })
+      if (sectionToOpen) {
+        ul = sectionToOpen.querySelectorAll(":scope > ul")
+        li = sectionToOpen.querySelectorAll(":scope > li")
+        if (ul) {
+          ul.forEach(x => {
+            if (x.style.display == "none") {
+              x.style.display = "block"
+            }
+            else {
+              x.style.display = "none"
+            }
+          })
+        }
+        if (li) {
+          li.forEach(x => {
+            if (x.style.display == "none") {
+              x.style.display = "block"
+            }
+            else {
+              x.style.display = "none"
+            }
+          })
+        }
+      }
+
+    }
+
+    try {
+      // Hidden Top 50 hits for MDG Megablast Table
+
+      var megaBlastTable = document.getElementById("megablast_qc-plot_table").getElementsByTagName("tbody")[0];
+      var topHitsTables = Array.from(document.querySelectorAll(`[id^=${"mqc-section-wrapper-top_hits_"}]`))
+
+      // Hide all tophits nav bar boxes
+      Array.from(document.getElementsByClassName("mqc-nav")[0].getElementsByTagName("li")).forEach(x => {
+        if (Array.from(x.getElementsByTagName("a"))[0].getAttribute("href").startsWith("#top_hits_")) {
+          x.style.display = "none"
+        }
+      })
+
+      // Hide all tophits tables
+      topHitsTables.forEach(x => {
+        x.style.display = "none"
+      })
+
+      Array.from(megaBlastTable.getElementsByTagName("tr")).forEach((tr, index) => {
+        tr.addEventListener("click", () => {
+          // Show or hide corresponding top hits table based on it's current state
+          if (topHitsTables[index].style.display == "none") {
+            topHitsTables[index].style.display = "block"
+          }
+          else {
+            topHitsTables[index].style.display = "none"
+          }
+        })
+        tr.addEventListener("mouseenter", () => {
+          // Display pointer cursor when hovering over megablast table
+          tr.style.cursor = "pointer"
+        })
+        tr.addEventListener("mouseleave", () => {
+          // Switch to auto cursor when moving off megablast table
+          tr.style.cursor = "auto"
+        })
+      })
+
+      // Add show all tophits button
+      var megaBlastTable = document.getElementById("mqc_violintable_wrapper_megablast_qc-plot_table")
+      var showText = megaBlastTable.querySelector(".mqc_table_numrows_text")
+      showTopHits = false
+
+      showAllButton = document.createElement("button")
+      showAllButton.setAttribute("type", "button")
+      showAllButton.setAttribute("class", "megablast_expand_tophits btn btn-outline-secondary btn-sm")
+      showAllButton.setAttribute("data-plot-anchor", "megablast_qc-plot")
+      showAllButton.setAttribute("data-bs-toggle", "tooltip")
+      showAllButton.setAttribute("data-bs-original-title", "Expand/Collapse all tophits tables")
+      showAllButton.innerHTML = "Expand Tophits"
+
+      showText.parentElement.insertBefore(showAllButton, showText)
+
+      // Add functionality
+      showAllButton.addEventListener("click", () => {
+        showTopHits = !showTopHits
+        showAllButton.innerHTML = showTopHits ? "Collapse Tophits" : "Expand Tophits"
+        showTopHitsDisplay = showTopHits ? "block" : "none"
+
+        topHitsTables.forEach(table => {
+          table.style.display = showTopHitsDisplay
+        })
+      })
+    }
+    catch (error){
+      console.log(error)
+    }
+
+    // Reorder report content
+    parent = document.getElementsByClassName("p-4 pe-5")[0]
+    content = document.getElementsByClassName("mqc-module-section")
+
+    analysisReportSection = null
+    megaBlastReportSection = null
+
+    Array.from(content).forEach(div => { //Find the Secondary Analysis section and megablast section
+      if (div.getAttribute("id").includes("secondary_analysis"))
+        analysisReportSection = div
+      if (div.getAttribute("id").includes("megablast_qc"))
+        megaBlastReportSection = div
+    })
+
+    for (const [key, value] of Object.entries(mdgProcessingDict)) {
+      Array.from(content).forEach(div => {
+        if (div.getAttribute("id").includes(key)) {
+          parent.insertBefore(div, analysisReportSection) //reorder analysis section
+        }
+      })
+    }
+
+    if (megaBlastReportSection != null) {
+      for (const [key, value] of Object.entries(mdgProcessingDict)) {
+        Array.from(content).forEach(div => {
+          if (div.getAttribute("id").includes(key)) {
+            parent.insertBefore(div, megaBlastReportSection) //reorder megablast section
+          }
+        })
+      }
+    }
+
+
+    // Collapsible sections
+    moduleSections = Array.from(document.getElementsByClassName("mqc-module-section")) //every module section
+
+    workOrderMDG = document.getElementById("mqc-module-section-work_order_info") //mdg header sections
+    sequencingResultsMDG = document.getElementById("mqc-module-section-sequencing_results")
+    processsingMDG = document.getElementById("mqc-module-section-mdg_processing_and_qc")
+    analysisMDG = document.getElementById("mqc-module-section-secondary_analysis")
+
+    workOrderSections = setUpSections(workOrderInfoDict)
+    sequencingSections = setUpSections(sequencingResultsDict)
+    processingSections = setUpSections(mdgProcessingDict)
+    analysisSections = setUpSections(secondaryAnalysisDict)
+
+    MDGSections = [workOrderSections, sequencingSections, processingSections, analysisSections]
+
+    function setUpSections(dict) {
+      sections = []
+      for (const [key, value] of Object.entries(dict)) {
+        moduleSections.forEach(div => {
+          if (div.getAttribute("id").includes(key)) {
+            sections.push(div)
+          }
+        })
+      }
+      return sections
+    }
+
+    // Swap out subsection headers for h7
+    headers = []
+
+    moduleSections.forEach(x => {
+      header = Array.from(x.getElementsByTagName("h2"))[0]
+      headers.push(header)
+    })
+
+    replaceHeaders(workOrderSections)
+    replaceHeaders(sequencingSections)
+    replaceHeaders(processingSections)
+    replaceHeaders(analysisSections)
+
+    function replaceHeaders(sections) {
+      headers.forEach(header => {
+        sections.forEach(section => {
+          if (section.contains(header)) {
+            newHeader = document.createElement("h7")
+            newHeader.innerHTML = header.innerHTML
+            for (const attr of header.attributes) {
+              newHeader.setAttribute(attr.name, attr.value);
+            }
+            header.replaceWith(newHeader)
+            header = newHeader
+          }
+        })
+      })
+    }
+
+    mdgHeaders = []
+    moduleHeaders = []
+
+    moduleSections.forEach(x => {
+      header = Array.from(x.getElementsByTagName("h2"))[0]
+      if (header)
+        mdgHeaders.push(header)
+    })
+
+    moduleSections.forEach(x => {
+      header = Array.from(x.getElementsByTagName("h7"))[0]
+      if (header)
+        moduleHeaders.push(header)
+    })
+
+    // If clicking on an MDG Header, alternate all submodules and internal charts
+    mdgHeaders.forEach(header => {
+      header.addEventListener("click", () => {
+        if (header.textContent.includes("Work Order Information")) alternateSubModules(workOrderSections, workOrderMDG)
+        else if (header.textContent.includes("Sequencing Results")) alternateSubModules(sequencingSections, sequencingResultsMDG)
+        else if (header.textContent.includes("MDG Processing and QC")) alternateSubModules(processingSections, processsingMDG)
+        else if (header.textContent.includes("Secondary Analysis")) alternateSubModules(analysisSections, analysisMDG)
+        else if (header.textContent.includes("Software Versions and Citations")) alternateSoftwareVersionsTable()
+
+        function alternateSubModules(sections, mdgSection) {
+          sections.forEach(section => {
+            if (section.style.display == "none") {
+              section.style.display = "block"
+            }
+            else {
+              section.style.display = "none"
+            }
+          })
+          internal = Array.from(mdgSection.querySelectorAll("[class^=mqc-section ]"))
+          internal.forEach(chart => {
+            if (chart.style.display == "none") {
+              chart.style.display = "block"
+            }
+            else {
+              chart.style.display = "none"
+            }
+          })
+        }
+      })
+
+      function alternateSoftwareVersionsTable() {
+        table = document.getElementById("mqc-section-wrapper-multiqc_software_versions-section-1")
+        if (table.style.display == "none") table.style.display = "block"
+        else table.style.display = "none"
+      }
+
+      header.addEventListener("mouseenter", () => {
+        // Display pointer cursor when hovering over header
+        document.body.style.cursor = "pointer"
+      })
+      header.addEventListener("mouseleave", () => {
+        // Switch to auto cursor when moving off header
+        document.body.style.cursor = "auto"
+      })
+    })
+
+    // If clicking on a module header, alternate all internal charts
+    moduleHeaders.forEach(header => {
+      header.addEventListener("click", () => {
+        id = header.getAttribute("id")
+        section = document.getElementById("mqc-module-section-" + id)
+        internal = Array.from(section.querySelectorAll("[class^=mqc-section ]"))
+        internal.forEach(chart => {
+          if (chart.style.display == "none") {
+            chart.style.display = "block"
+            if (chart.hasAttribute("id") && chart.getAttribute("id").includes("top_hits")) { // never show top hits tables
+              chart.style.display = "none"
+            }
+          }
+          else {
+            chart.style.display = "none"
+          }
+        })
+      })
+      header.addEventListener("mouseenter", () => {
+        // Display pointer cursor when hovering over header
+        document.body.style.cursor = "pointer"
+      })
+      header.addEventListener("mouseleave", () => {
+        // Switch to auto cursor when moving off header
+        document.body.style.cursor = "auto"
+      })
+    })
+
+    collapseButton = document.getElementById("collapse_sections")
+    collapsed = false
+
+    // Collapse all sections button
+    collapseButton.addEventListener("click", () => {
+      collapsed = !collapsed
+      displayState = ""
+      if (collapsed) {
+        displayState = "none"
+        collapseButton.innerHTML = "Expand All Sections"
+      }
+      else {
+        displayState = "block"
+        collapseButton.innerHTML = "Collapse All Sections"
+      }
+
+      moduleSections.forEach(x => {
+
+        header = Array.from(x.getElementsByTagName("h2"))[0] //event when click on title
+
+        mqcSections = Array.from(x.querySelectorAll("[class^=mqc-section ]"))
+        mqcSections.forEach(y => {
+          y.style.display = displayState
+          if (y.hasAttribute("id") && y.getAttribute("id").includes("top_hits")) {
+            y.style.display = "none"
+          }
+        })
+
+        if (processingSections.includes(x) || analysisSections.includes(x) || sequencingSections.includes(x) || workOrderSections.includes(x)) {
+          x.style.display = displayState
+        }
+      })
+    })
+
+    // hide all empty mdg sections
+    if (workOrderArray.length == 0 && workOrderInfoNavSection.querySelector("ul").firstElementChild == null) {
+        workOrderInfoNavSection.style.display = "none"
+        workOrderMDG.style.display = "none"
+    }
+    if (sequencingArray.length == 0 && sequencingResultsNavSection.querySelector("ul").firstElementChild == null) {
+        sequencingResultsNavSection.style.display = "none"
+        sequencingResultsMDG.style.display = "none"
+    }
+    if (processingArray.length == 0 && mdgProcessingNavSection.querySelector("ul").firstElementChild == null) {
+        mdgProcessingNavSection.style.display = "none"
+        processsingMDG.style.display = "none"
+    }
+    if (analysisArray.length == 0 && secondaryAnalysisNavSection.querySelector("ul").firstElementChild == null) {
+        secondaryAnalysisNavSection.style.display = "none"
+        analysisMDG.style.display = "none"
+    }
+  </script>
+  {% include 'foot.html' %}
+</body>
+
 </html>
