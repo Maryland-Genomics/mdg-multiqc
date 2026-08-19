@@ -38,8 +38,11 @@ def parse(p_path : str, p_project : str, p_runtype : str, p_unaliged_folder : st
         pass
     post_process_csv(mdg_parsed_dir)
 
-# Creates a folder in the project directory to store generated data files
+
 def generate_MDG_parsed_folder(mdg_parsed_dir):
+    """
+    Creates a folder in the project directory to store generated data files
+    """
     try:
         os.makedirs(mdg_parsed_dir)
         print(f"Nested directories '{mdg_parsed_dir}' created successfully.")
@@ -50,8 +53,11 @@ def generate_MDG_parsed_folder(mdg_parsed_dir):
     except Exception as e:
         print(f"An error occurred: {e}")
 
-# Creates a file to store parsed sequencing info in the illumina folder
+
 def parse_sequencing_info(path, mdg_parsed_dir):
+    """
+    Creates a file to store parsed sequencing info in the illumina folder
+    """
     # Copy files
     run_param = shutil.copy(f"{path}/RunParameters.xml", mdg_parsed_dir)
     run_info = shutil.copy(f"{path}/RunInfo.xml", mdg_parsed_dir)
@@ -104,8 +110,11 @@ def parse_sequencing_info(path, mdg_parsed_dir):
     df = pd.DataFrame(data)
     df.to_csv(f"{mdg_parsed_dir}/sequencing_info.csv", index=False)
 
-# Creates a file to store parsed flowcell info in the illumina folder
+
 def parse_flowcell_info(path, mdg_parsed_dir):
+    """
+    Creates a file to store parsed flowcell info in the illumina folder
+    """
     # Copy file (temporarily, since MultiQC recognizes summary.csv and replaces custom content module with Illumina Module)
     flow_cell_info = shutil.copy(f"{path}/PA_Logs/summary.csv", mdg_parsed_dir)
 
@@ -123,8 +132,11 @@ def parse_flowcell_info(path, mdg_parsed_dir):
     os.replace(f"{mdg_parsed_dir}/temp.csv", clean_data)
     os.remove(flow_cell_info)
 
-# Creates a file to store parsed MegaBlast QC info in the illumina folder
+
 def parse_megablastqc_info(path, mdg_parsed_dir, project, runtype, unaligned_folder):
+    """
+    Creates a file to store parsed MegaBlast QC info in the illumina folder
+    """
     # Set up dataframe
     data = {
         "ID": [],
@@ -171,6 +183,7 @@ def parse_megablastqc_info(path, mdg_parsed_dir, project, runtype, unaligned_fol
         df.to_csv(f"{mdg_parsed_dir}/all_tophits.csv", index=True)
     except Exception as e:
         print(e)
+
 
 def get_tophits(data, tophits_directory, tophits_file, mdg_parsed_dir, project, tophits_count, runtype):
     try:
@@ -308,9 +321,12 @@ def get_tophits(data, tophits_directory, tophits_file, mdg_parsed_dir, project, 
     except Exception as e:
         print(e)
     return data, tophits_count
-    
-# Copies runinfo.csv into the illumina folder and trims file to be read
+
+
 def generate_sample_info(path, mdg_parsed_dir, project, runtype):
+    """
+    Copies runinfo.csv into the illumina folder and trims file to be read
+    """
     # Copy file
     sample_info = shutil.copy(f"{path}/PA_Logs/runinfo.csv", mdg_parsed_dir)
 
@@ -327,27 +343,32 @@ def generate_sample_info(path, mdg_parsed_dir, project, runtype):
 
     # Processing
     df = pd.read_csv(clean_data)
+    # filter for rows in the selected project
+    df.drop(df[df["project"] != project].index, inplace=True)
 
     if runtype == "Illumina":
-    # Drop some columns
+        # Drop some columns
         df = df.drop(labels=["sequencing_sub_sample_id", "project", "mp_insert_size", ], axis=1)
-
         # Rename columns
         df = df.rename(columns={"lane": "Lane", "master_sample_id": "Sample", "library_id": "Library", "pool_name": "Pool Name", "index_num": "Library Index", "external_id": "External ID", "strain": "Strain", "type": "Library Type", "median_smear_size": "Size (bp)",
                                 "species": "Species", "sample_name": "Sample Name", "method": "Method", "loaded": "Loaded", "needed": "Needed", "index_type": "Library Index Type", "index_sequence": "Library Index Sequence", "premade_pool": "Premade Pool",
                                 "pool_index_set": "Pool Index", "pool_index_1": "Pool Index 1", "pool_index_2": "Pool Index 2", "library_prep_kit": "Library Prep Kit", "sample_index_name": "Sample Index", "sample_index": "Sample Index Sequence",
                                 "read_pairs": "Read Pairs", "control_projects": "Control Projects", "lib_category": "Library Category", "primer": "Primer", "comments": "Comments"})
     elif runtype == "PacBio":
-        df.drop(df[df["project"] != project].index, inplace=True)
         df = df.drop(labels=["project"], axis=1)
+
     df.to_csv(clean_data)
 
-# Copies trimming.logs.csv into the illumina folder and trims file to be read
+
 def generate_read_stats(path, mdg_parsed_dir, project, runtype):
+    """
+    Copies trimming.logs.csv into the illumina folder and trims file to be read
+    """
     if runtype == "Illumina":
         generate_illumina_read_stats(path, mdg_parsed_dir, project)
     elif runtype == "PacBio":
         generate_pacBio_read_stats(path, mdg_parsed_dir, project)
+
 
 def generate_pacBio_read_stats(path, mdg_parsed_dir, project):
     # Find HiFi Stats
@@ -367,6 +388,7 @@ def generate_pacBio_read_stats(path, mdg_parsed_dir, project):
 
     pf_df.to_csv(f"{mdg_parsed_dir}/pf_polymerase_read_stats.csv")
     hifi_df.to_csv(f"{mdg_parsed_dir}/hifi_stats.csv")
+
 
 def generate_illumina_read_stats(path, mdg_parsed_dir, project):
     # Copy file
@@ -393,12 +415,16 @@ def generate_illumina_read_stats(path, mdg_parsed_dir, project):
 
     df.to_csv(clean_data)
 
-# Copies plots to illumina folder
+
 def copy_plots(path, mdg_parsed_dir, project, runtype):
+    """
+    Copies plots to illumina folder
+    """
     if (runtype == "Illumina"):
-        copy_illumina_plots(path, mdg_parsed_dir)
+        copy_illumina_plots(path, mdg_parsed_dir, project)
     elif(runtype == "PacBio"):
         copy_pacBio_plots(path, mdg_parsed_dir, project)
+
 
 def copy_pacBio_plots(path, mdg_parsed_dir, project):
     cell = get_cell(path, project)
@@ -432,9 +458,11 @@ def copy_pacBio_plots(path, mdg_parsed_dir, project):
         except FileNotFoundError:
             print(f"{image} not found")
 
-def copy_illumina_plots(path, mdg_parsed_dir):
+
+def copy_illumina_plots(path, mdg_parsed_dir, project):
     # Get runinfo.csv
     runinfo_df = pd.read_csv(f"{path}/PA_Logs/runinfo.csv", header=1)
+    runinfo_df.drop(runinfo_df[runinfo_df["project"] != project].index, inplace=True)
 
     lanes = runinfo_df["lane"]
     unique_lanes = np.unique(lanes)
@@ -462,6 +490,7 @@ def copy_illumina_plots(path, mdg_parsed_dir):
     for image in images_to_copy:
         shutil.copy(f"{path}/PA_Logs/images/{image}", f"{mdg_parsed_dir}/images")
 
+
 def parse_work_order_info(path, project, mdg_parsed_dir):
     try:
         df = pd.read_csv(f"{path}/PA_Logs/runinfo.tmp")
@@ -484,6 +513,7 @@ def parse_work_order_info(path, project, mdg_parsed_dir):
     
     work_order_info = f"{mdg_parsed_dir}/work_order_info.csv"
     df.to_csv(work_order_info, index=False)
+
 
 def move_module_files(path, project, mdg_parsed_dir, unaligned_folder, runtype):
     if runtype == "Illumina":
@@ -528,6 +558,7 @@ def move_module_files(path, project, mdg_parsed_dir, unaligned_folder, runtype):
         except Exception as e:
             print(e)
 
+
 def copy_assets(outdir):
     try:
         os.makedirs(f"{outdir}/assets")
@@ -544,17 +575,20 @@ def copy_assets(outdir):
     for fname in files:
         shutil.copy(f"{assets_dir}/{fname}", f"{outdir}/assets")
 
+
 def index_containing_substring(the_list, substring):
     for i, s in enumerate(the_list):
         if substring in s:
               return i
     raise ValueError(f"{substring} not found")
 
+
 def get_cell(path, project):
     df = pd.read_csv(f"{path}/PA_Logs/runinfo.csv", header=1)
     line = df[df["project"] == project].index[0]
     cell = df.loc[line, "cell"]
     return f"1_{cell}"
+
 
 def post_process_csv(mdg_parsed_dir):
     for x in os.listdir(mdg_parsed_dir):

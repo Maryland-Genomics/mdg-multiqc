@@ -49,6 +49,7 @@ def generate_config(p_path : str, p_project : str, p_runtype : str, p_unaligned_
     with open(f'{p_outdir}/multiqc_config_{project}.yaml', 'w') as file:
         yaml.dump(config_data, file)
 
+
 def get_custom_data(path, project, runtype, unaligned_folder) -> dict:
     custom_data = {
         "mdg_processing_and_qc": {
@@ -199,6 +200,7 @@ def get_custom_data(path, project, runtype, unaligned_folder) -> dict:
         print(e)
     return custom_data
 
+
 def get_search_path(runtype):
     sp = {
         "sequencing_info": {
@@ -257,6 +259,7 @@ def get_search_path(runtype):
             sp.update(temp_dict)
     return sp
 
+
 def get_report_section_order(runtype):
     report_section_order = {
         "work_order_submission": {
@@ -304,6 +307,7 @@ def get_report_section_order(runtype):
             }
     return report_section_order
 
+
 def get_software_versions(runtype):
     software_versions = {
         "MultiQC": "1.36.dev0/citePhilip Ewels, Måns Magnusson, Sverker Lundin, Max Käller, MultiQC: summarize analysis results for multiple tools and samples in a single report, Bioinformatics, Volume 32, Issue 19, October 2016, Pages 3047–3048, https://doi.org/10.1093/bioinformatics/btw354",
@@ -320,6 +324,7 @@ def get_software_versions(runtype):
         }
     software_versions.update(temp_dict)
     return software_versions
+
 
 def get_lanes(path):
     # Get every unique lane in run

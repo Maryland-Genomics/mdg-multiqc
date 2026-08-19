@@ -10,8 +10,8 @@ import pandas as pd
 # This script calls both Illumina_files_parser and MultiQC_Config_Generator
 def main():
     parser = argparse.ArgumentParser(description="Run MultiQC and generate MDG tables/images")
-    parser.add_argument('-i', '--input', metavar='', required=True, help='Path to run folder')
-    parser.add_argument('-p', '--project', metavar='', default='', required=True, help="Project which MultiQC will interpret")
+    parser.add_argument('-i', '--input', required=True, help='Path to run folder')
+    parser.add_argument('-p', '--project', required=True, help="Project which MultiQC will interpret")
     parser.add_argument('-nr', '--noregen', action='store_true', help="Don't Regenerate Illumina Files and Config")
     parser.add_argument('-nm', '--nomultiqc', action='store_true', help="Don't Run MultiQC")
     args = parser.parse_args()
@@ -19,10 +19,7 @@ def main():
     if not os.path.isdir(args.input):
         raise NotADirectoryError(args.input)
 
-    path = os.path.split(args.input)[1]
-    if path == "":
-        path = os.path.split(args.input)[0]
-        path = os.path.split(path)[1] # Get the first folder up if blank
+    path = args.input
 
     # Check if project is valid
     runinfo_df = pd.read_csv(f"{path}/PA_Logs/runinfo.csv", header=1)
