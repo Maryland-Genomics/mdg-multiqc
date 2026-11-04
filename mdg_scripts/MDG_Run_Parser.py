@@ -1,57 +1,167 @@
+import csv
+import json
 import pandas as pd
 import os
 import shutil
 import xml.etree.ElementTree as ET
-import numpy as np
 import re
+import yaml
 
-def parse(p_path : str, p_project : str, p_runtype : str, p_unaliged_folder : str, p_outdir : str):
+def parse(p_path : str, p_project : str, p_sequencing_platform : str, p_folders : list[str], p_outdir : str):
+    """
+    Generate the parsed data files MultiQC reads.
+
+    p_folders are the Unaligned folders (Illumina) or cell folders (PacBio) to report on.
+    Files covering the whole run go to {outdir}/run_data, and files specific to one
+    Unaligned folder or cell go to {outdir}/{folder}_data.
+    """
     project = p_project
     path = p_path
-    runtype = p_runtype
-    unaligned_folder = p_unaliged_folder
-    
+    sequencing_platform = p_sequencing_platform
+    outdir = p_outdir
+    runinfo = load_runinfo(path)
+    column_config = load_column_config()
 
-    mdg_illumina_folder_name = "MDG_Run_Parsed_Files"
-    project_dir = f"{path}/{unaligned_folder}/QA/Project_{project}"
-    mdg_parsed_dir = None
+    copy_assets(outdir)
 
-    if runtype == "Illumina":
-        mdg_parsed_dir =  f"{project_dir}/{mdg_illumina_folder_name}"
-    elif runtype == "PacBio":
-        mdg_parsed_dir = f"{path}/Project_{project}_{mdg_illumina_folder_name}"
+    run_data_dir = get_run_data_dir(outdir)
+    reset_dir(run_data_dir)
+    parse_work_order_info(runinfo, project, run_data_dir, column_config["work_order"])
+    generate_sample_info(
+        runinfo, run_data_dir, project, sequencing_platform, column_config["sample_info"][sequencing_platform]
+    )
+    generate_read_stats(path, run_data_dir, project, sequencing_platform)
+    if sequencing_platform == "illumina":
+        copy_illumina_plots(path, runinfo, run_data_dir, project)
+        parse_sequencing_info(path, run_data_dir)
+        parse_flowcell_info(path, run_data_dir)
+    post_process_csv(run_data_dir)
+
+    # Tophits numbering continues across folders so report section ids stay unique
+    tophits_count = 0
+    for folder in p_folders:
+        folder_data_dir = get_data_dir(outdir, folder)
+        reset_dir(folder_data_dir)
+        if sequencing_platform == "pacbio":
+            copy_pacBio_plots(path, folder_data_dir, folder)
+        tophits_count = parse_megablastqc_info(
+            path, folder_data_dir, project, sequencing_platform, folder, tophits_count
+        )
+        move_module_files(path, folder_data_dir, folder, sequencing_platform)
+        post_process_csv(folder_data_dir)
 
 
-    generate_MDG_parsed_folder(mdg_parsed_dir)
-    parse_work_order_info(path, project, mdg_parsed_dir)
-    generate_sample_info(path, mdg_parsed_dir, project, runtype)
-    generate_read_stats(path, mdg_parsed_dir, project, runtype)
-    copy_plots(path, mdg_parsed_dir, project, runtype)
-    parse_megablastqc_info(path, mdg_parsed_dir, project, runtype, unaligned_folder)
-    move_module_files(path, project, mdg_parsed_dir, unaligned_folder, runtype)
-    copy_assets(p_outdir)
-
-    if (runtype == "Illumina"):
-        parse_sequencing_info(path, mdg_parsed_dir)
-        parse_flowcell_info(path, mdg_parsed_dir)
-    elif (runtype == "PacBio"):
-        pass
-    post_process_csv(mdg_parsed_dir)
+def get_run_data_dir(outdir):
+    return f"{outdir}/run_data"
 
 
-def generate_MDG_parsed_folder(mdg_parsed_dir):
+def get_data_dir(outdir, folder):
     """
-    Creates a folder in the project directory to store generated data files
+    Folder for data specific to one Unaligned folder (Illumina) or cell (PacBio)
     """
+    return f"{outdir}/{folder}_data"
+
+
+RUNINFO_COLUMNS_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "runinfo_columns.yaml")
+
+# Tables built from runinfo.json are tab-separated: MultiQC's custom content parser doesn't
+# understand CSV quoting, so commas inside LIMS values (contact lists, comments) would split columns.
+# get_field() strips tabs and line breaks from values, so no quoting is needed.
+TSV_ARGS = {"sep": "\t", "quoting": csv.QUOTE_NONE}
+
+
+def load_runinfo(path):
+    """
+    Load the run's PA_Logs/runinfo.json
+    """
+    runinfo_json = f"{path}/PA_Logs/runinfo.json"
     try:
-        os.makedirs(mdg_parsed_dir)
-        print(f"Nested directories '{mdg_parsed_dir}' created successfully.")
-    except FileExistsError:
-        print(f"Existing directory '{mdg_parsed_dir}' overwritten.")
-    except PermissionError:
-        print(f"Permission denied: Unable to create '{mdg_parsed_dir}'.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
+        with open(runinfo_json, encoding="utf-8") as fin:
+            return json.load(fin)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Run info file not found: {runinfo_json}") from None
+
+
+def load_column_config():
+    """
+    Load the report table column definitions from runinfo_columns.yaml
+    """
+    with open(RUNINFO_COLUMNS_FILE, encoding="utf-8") as fin:
+        return yaml.safe_load(fin)
+
+
+def get_lanes(runinfo, project):
+    """
+    Return the Illumina lanes (as strings, in lane order) holding this project
+    """
+    lanes = [lane for lane, info in runinfo["lanes"].items() if project in info["projects"]["value"]]
+    return sorted(lanes, key=int)
+
+
+def get_cells(runinfo, project):
+    """
+    Return the PacBio cell folders (e.g. 1_A01) holding this project
+    """
+    return [cell for cell, info in runinfo["cells"].items() if project in info["projects"]["value"]]
+
+
+def get_project_libraries(runinfo, project, include_controls=False):
+    """
+    Return {library_id: library} for this project's libraries. With include_controls, also
+    return control libraries whose control_projects include this project.
+    """
+    return {
+        lib_id: lib
+        for lib_id, lib in runinfo["libraries"].items()
+        if lib["project"]["value"] == project
+        or (include_controls and project in lib["control_projects"]["value"])
+    }
+
+
+def get_field(entry, field, column, context=None):
+    """
+    Return the value of one runinfo_columns.yaml field for a runinfo.json entry.
+
+    field is a dot-separated path ("library_pool.index_set.index1"), a list of paths whose values
+    are joined with "-", or a "_name" looked up in context (e.g. the row's lane or cell).
+    """
+    if isinstance(field, list):
+        values = [get_field(entry, f, column, context) for f in field]
+        return "-".join(str(v) for v in values if v != "")
+    if field.startswith("_"):
+        if context is None or field not in context:
+            raise KeyError(f"Column '{column}': '{field}' is not available for this table")
+        return context[field]
+
+    def resolve(node, keys):
+        # Lists (e.g. specimen_work_order): collect the value from every item
+        if isinstance(node, list):
+            values = list(dict.fromkeys(str(v) for v in (resolve(item, keys) for item in node) if v != ""))
+            return "; ".join(values)
+        if not keys:
+            if not (isinstance(node, dict) and "value" in node):
+                raise ValueError(f"Column '{column}': runinfo.json field '{field}' is not a single value")
+            value = node["value"]
+            if value is None:
+                return ""
+            if isinstance(value, list):
+                value = ", ".join(str(v) for v in value)
+            if isinstance(value, str):
+                value = re.sub(r"\s*[\t\r\n]+\s*", " ", value).strip()
+            return value
+        if not isinstance(node, dict) or keys[0] not in node:
+            raise KeyError(f"Column '{column}': runinfo.json has no field '{field}'")
+        return resolve(node[keys[0]], keys[1:])
+
+    return resolve(entry, field.split("."))
+
+
+def reset_dir(directory):
+    """
+    Remove and recreate a generated data folder so files from a previous run can't linger
+    """
+    shutil.rmtree(directory, ignore_errors=True)
+    os.makedirs(directory)
 
 
 def parse_sequencing_info(path, mdg_parsed_dir):
@@ -133,9 +243,11 @@ def parse_flowcell_info(path, mdg_parsed_dir):
     os.remove(flow_cell_info)
 
 
-def parse_megablastqc_info(path, mdg_parsed_dir, project, runtype, unaligned_folder):
+def parse_megablastqc_info(path, mdg_parsed_dir, project, sequencing_platform, folder, tophits_count=0):
     """
-    Creates a file to store parsed MegaBlast QC info in the illumina folder
+    Creates a file to store parsed MegaBlast QC info for one Unaligned folder (Illumina) or cell (PacBio).
+    tophits_count is the number of tophits files already written by earlier calls; the
+    updated count is returned so numbering stays unique across folders.
     """
     # Set up dataframe
     data = {
@@ -157,47 +269,50 @@ def parse_megablastqc_info(path, mdg_parsed_dir, project, runtype, unaligned_fol
         }
 
     tophits_directory = None
-    if (runtype == "Illumina"):
-        tophits_directory = f"{path}/{unaligned_folder}/QC/Project_{project}"
-    elif (runtype == "PacBio"):
-        tophits_directory = f"{path}/{get_cell(path, project)}/hifi_reads/QC"
+    if (sequencing_platform == "illumina"):
+        tophits_directory = f"{path}/{folder}/QC/Project_{project}"
+    elif (sequencing_platform == "pacbio"):
+        tophits_directory = f"{path}/{folder}/hifi_reads/QC"
 
-    tophits_count = 0
+    start_count = tophits_count
 
     try:
-        if runtype == "Illumina":
+        if sequencing_platform == "illumina":
             for sample in os.listdir(tophits_directory):
                 if sample.startswith("Sample"):
                     # Assume file called *.topHits.txt, get all files
                     for tophits_file in os.listdir(f"{tophits_directory}/{sample}/QC"):
                         # Get all files in directory that end with topHits.txt
                         if tophits_file.endswith("topHits.txt"):
-                            data, tophits_count = get_tophits(data, f"{tophits_directory}/{sample}/QC", tophits_file, mdg_parsed_dir, project, tophits_count, runtype)
-        elif runtype == "PacBio":
+                            data, tophits_count = get_tophits(data, f"{tophits_directory}/{sample}/QC", tophits_file, mdg_parsed_dir, project, tophits_count, sequencing_platform)
+        elif sequencing_platform == "pacbio":
             for tophits_file in os.listdir(tophits_directory):
                 if tophits_file.endswith("topHits.txt"):
-                    data, tophits_count = get_tophits(data, tophits_directory, tophits_file, mdg_parsed_dir, project, tophits_count, runtype)
+                    data, tophits_count = get_tophits(data, tophits_directory, tophits_file, mdg_parsed_dir, project, tophits_count, sequencing_platform)
 
-        # Write data to new csv file
+        # Write data to new csv file. Row numbers continue from earlier Unaligned folders: MultiQC
+        # merges every all_tophits.csv into one table keyed on this column, so repeats would overwrite rows.
         df = pd.DataFrame(data)
-        df.to_csv(f"{mdg_parsed_dir}/all_tophits.csv", index=True)
+        df.index = range(start_count + 1, start_count + 1 + len(df))
+        df.to_csv(f"{mdg_parsed_dir}/all_tophits.csv", index=True, index_label="No.")
     except Exception as e:
         print(e)
+    return tophits_count
 
 
-def get_tophits(data, tophits_directory, tophits_file, mdg_parsed_dir, project, tophits_count, runtype):
+def get_tophits(data, tophits_directory, tophits_file, mdg_parsed_dir, project, tophits_count, sequencing_platform):
     try:
         with open(f"{tophits_directory}/{tophits_file}") as fin:
             tophits = fin.read().splitlines(True)
     
         # Parse txt contents
-        if runtype == "Illumina":
+        if sequencing_platform == "illumina":
             id_index_start = tophits[0].find(":", tophits[0].find(":") + 1) + 1
             id_index_end = tophits[0].find("lane:") + 6
             id = tophits[0][id_index_start:id_index_end]
             id = id.replace(":lane:", "-")
             data["ID"].append(id)
-        elif runtype == "PacBio":
+        elif sequencing_platform == "pacbio":
             id_index_start = tophits_file.find("reads") + 6
             id_index_end = tophits_file.find(".subset")
             id = tophits_file[id_index_start:id_index_end]
@@ -323,50 +438,37 @@ def get_tophits(data, tophits_directory, tophits_file, mdg_parsed_dir, project, 
     return data, tophits_count
 
 
-def generate_sample_info(path, mdg_parsed_dir, project, runtype):
+def generate_sample_info(runinfo, mdg_parsed_dir, project, sequencing_platform, columns):
     """
-    Copies runinfo.csv into the illumina folder and trims file to be read
+    Writes the Sample Information table: one row per project library per lane (Illumina) or
+    cell (PacBio), with the columns defined in runinfo_columns.yaml. Control libraries whose
+    control_projects include this project are listed too.
     """
-    # Copy file
-    sample_info = shutil.copy(f"{path}/PA_Logs/runinfo.csv", mdg_parsed_dir)
+    if sequencing_platform == "illumina":
+        placements = [("_lane", lane, runinfo["lanes"][lane]) for lane in get_lanes(runinfo, project)]
+    elif sequencing_platform == "pacbio":
+        placements = [("_cell", cell, runinfo["cells"][cell]) for cell in get_cells(runinfo, project)]
 
-    # Create new csv file with every line after first (keep copy intact)
-    with open(sample_info, 'r') as fin:
-        data = fin.read().splitlines(True)
-    with open(f"{mdg_parsed_dir}/temp.csv", 'w') as fout:
-        fout.writelines(data[1:])
+    rows = []
+    for context_key, location, info in placements:
+        for lib_id in info["libraries"]["value"]:
+            lib = runinfo["libraries"][lib_id]
+            if lib["project"]["value"] != project and project not in lib["control_projects"]["value"]:
+                continue
+            context = {context_key: location, "_library_id": lib_id}
+            rows.append({column: get_field(lib, field, column, context) for column, field in columns.items()})
 
-    # Rename cleaned file, remove copy
-    clean_data = f"{mdg_parsed_dir}/runinfo_clean.csv"
-    os.replace(f"{mdg_parsed_dir}/temp.csv", clean_data)
-    os.remove(sample_info)
-
-    # Processing
-    df = pd.read_csv(clean_data)
-    # filter for rows in the selected project
-    df.drop(df[df["project"] != project].index, inplace=True)
-
-    if runtype == "Illumina":
-        # Drop some columns
-        df = df.drop(labels=["sequencing_sub_sample_id", "project", "mp_insert_size", ], axis=1)
-        # Rename columns
-        df = df.rename(columns={"lane": "Lane", "master_sample_id": "Sample", "library_id": "Library", "pool_name": "Pool Name", "index_num": "Library Index", "external_id": "External ID", "strain": "Strain", "type": "Library Type", "median_smear_size": "Size (bp)",
-                                "species": "Species", "sample_name": "Sample Name", "method": "Method", "loaded": "Loaded", "needed": "Needed", "index_type": "Library Index Type", "index_sequence": "Library Index Sequence", "premade_pool": "Premade Pool",
-                                "pool_index_set": "Pool Index", "pool_index_1": "Pool Index 1", "pool_index_2": "Pool Index 2", "library_prep_kit": "Library Prep Kit", "sample_index_name": "Sample Index", "sample_index": "Sample Index Sequence",
-                                "read_pairs": "Read Pairs", "control_projects": "Control Projects", "lib_category": "Library Category", "primer": "Primer", "comments": "Comments"})
-    elif runtype == "PacBio":
-        df = df.drop(labels=["project"], axis=1)
-
-    df.to_csv(clean_data)
+    df = pd.DataFrame(rows, columns=list(columns))
+    df.to_csv(f"{mdg_parsed_dir}/runinfo_clean.tsv", **TSV_ARGS)
 
 
-def generate_read_stats(path, mdg_parsed_dir, project, runtype):
+def generate_read_stats(path, mdg_parsed_dir, project, sequencing_platform):
     """
     Copies trimming.logs.csv into the illumina folder and trims file to be read
     """
-    if runtype == "Illumina":
+    if sequencing_platform == "illumina":
         generate_illumina_read_stats(path, mdg_parsed_dir, project)
-    elif runtype == "PacBio":
+    elif sequencing_platform == "pacbio":
         generate_pacBio_read_stats(path, mdg_parsed_dir, project)
 
 
@@ -416,18 +518,10 @@ def generate_illumina_read_stats(path, mdg_parsed_dir, project):
     df.to_csv(clean_data)
 
 
-def copy_plots(path, mdg_parsed_dir, project, runtype):
+def copy_pacBio_plots(path, mdg_parsed_dir, cell):
     """
-    Copies plots to illumina folder
+    Copies one cell's plots, prefixed with the cell name so MultiQC can tell cells apart
     """
-    if (runtype == "Illumina"):
-        copy_illumina_plots(path, mdg_parsed_dir, project)
-    elif(runtype == "PacBio"):
-        copy_pacBio_plots(path, mdg_parsed_dir, project)
-
-
-def copy_pacBio_plots(path, mdg_parsed_dir, project):
-    cell = get_cell(path, project)
     image_dir = f"{path}/{cell}/Filter/dataset-reports/reports"
     images_to_copy = [
     "hexbin_length_plot.png",
@@ -454,25 +548,18 @@ def copy_pacBio_plots(path, mdg_parsed_dir, project):
 
     for image in images_to_copy:
         try:
-            shutil.copy(f"{image_dir}/{image}", f"{mdg_parsed_dir}/images")
+            shutil.copy(f"{image_dir}/{image}", f"{mdg_parsed_dir}/images/{cell}_{image}")
         except FileNotFoundError:
             print(f"{image} not found")
 
 
-def copy_illumina_plots(path, mdg_parsed_dir, project):
-    # Get runinfo.csv
-    runinfo_df = pd.read_csv(f"{path}/PA_Logs/runinfo.csv", header=1)
-    runinfo_df.drop(runinfo_df[runinfo_df["project"] != project].index, inplace=True)
-
-    lanes = runinfo_df["lane"]
-    unique_lanes = np.unique(lanes)
-
-    # Get list of all images to copy
+def copy_illumina_plots(path, runinfo, mdg_parsed_dir, project):
+    # Get list of all images to copy for this project's lanes
     image_dir = f"{path}/PA_Logs/images/"
     images_in_dir = os.listdir(image_dir)
     images_to_copy = []
 
-    for lane in unique_lanes:
+    for lane in get_lanes(runinfo, project):
         for image in images_in_dir:
             if image.find(f"_{lane}_") != -1:
                 images_to_copy.append(image)
@@ -491,51 +578,58 @@ def copy_illumina_plots(path, mdg_parsed_dir, project):
         shutil.copy(f"{path}/PA_Logs/images/{image}", f"{mdg_parsed_dir}/images")
 
 
-def parse_work_order_info(path, project, mdg_parsed_dir):
-    try:
-        df = pd.read_csv(f"{path}/PA_Logs/runinfo.tmp")
-    except(FileNotFoundError):
-        df = pd.read_csv(f"{path}/PA_Logs/runinfo.tmp.org")
+def parse_work_order_info(runinfo, project, mdg_parsed_dir, columns):
+    """
+    Writes the Work Order table: one row per work order on this project's libraries, with the
+    columns defined in runinfo_columns.yaml plus a Sample Count of the project's libraries and
+    its control libraries
+    """
+    libraries = get_project_libraries(runinfo, project)
+    rows = []
+    for lib in libraries.values():
+        for specimen_work_order in lib["specimen_work_order"]:
+            work_order = specimen_work_order["work_order"]
+            rows.append({column: get_field(work_order, field, column) for column, field in columns.items()})
 
-    df = df[["Work Order", "WO PI", "WO Submitter", "WO Additional Contact(s)", "WO Billing Contact", "Quote Number"]]
-    df = df[df["Work Order"].str.find(project) != -1]
-    df = df.dropna(axis=0, how="all")
-
-    sample_df = pd.read_csv(f"{path}/PA_Logs/runinfo.csv", header=1)
-    try:
-        unique_lib = len(pd.unique(sample_df["library"]))
-    except:
-        unique_lib = len(pd.unique(sample_df["library_id"]))
-
-    unique_lib_arr = [unique_lib] * df.shape[0]
-    
-    df.insert(6, "Sample Count", unique_lib_arr, True)
-    
-    work_order_info = f"{mdg_parsed_dir}/work_order_info.csv"
-    df.to_csv(work_order_info, index=False)
+    df = pd.DataFrame(rows, columns=list(columns)).drop_duplicates()
+    df["Sample Count"] = len(get_project_libraries(runinfo, project, include_controls=True))
+    df.to_csv(f"{mdg_parsed_dir}/work_order_info.tsv", index=False, **TSV_ARGS)
 
 
-def move_module_files(path, project, mdg_parsed_dir, unaligned_folder, runtype):
-    if runtype == "Illumina":
+def move_module_files(path, mdg_parsed_dir, folder, sequencing_platform):
+    """
+    Copies tool output MultiQC modules read, for one Unaligned folder (Illumina) or cell (PacBio)
+    """
+    if sequencing_platform == "illumina":
         # Get trimmomatic files
         try:
-            shutil.copy(f"{path}/{unaligned_folder}/TMP/adaptor_trimming_logs/sample.adap_trim.err", mdg_parsed_dir)
+            trimmomatic_dir = f"{path}/{folder}/TMP/adaptor_trimming_logs"
+            for file in os.listdir(trimmomatic_dir):
+                if file.endswith(".adap_trim.err"):
+                    shutil.copy(f"{path}/{folder}/TMP/adaptor_trimming_logs/{file}", mdg_parsed_dir)
+
+            #shutil.copy(f"{path}/{folder}/TMP/adaptor_trimming_logs/IL34481-001_S50_L005.trimmomatic.log", mdg_parsed_dir)
         except Exception as e:
             print(e)
         # Get cutadapt files
         try:
-            cutadapt_dir = f"{path}/{unaligned_folder}/TMP/adaptor_trimming_logs"
+            cutadapt_dir = f"{path}/{folder}/TMP/adaptor_trimming_logs"
             for file in os.listdir(cutadapt_dir):
                 if file.endswith(".cutadapt.log"):
-                    shutil.copy(f"{path}/{unaligned_folder}/TMP/adaptor_trimming_logs/{file}", f"{mdg_parsed_dir}/{file}.json")
+                    shutil.copy(f"{path}/{folder}/TMP/adaptor_trimming_logs/{file}", f"{mdg_parsed_dir}/{file}.json")
         except Exception as e:
             print(e)
-        # Get bcl2fastq files
+        # Get bcl2fastq files. MultiQC's bcl2fastq module keys lanes by RunId, so two Unaligned
+        # folders covering the same lane would overwrite each other; tag RunId with the folder name.
         try:
-            shutil.copy(f"{path}/{unaligned_folder}/Stats/Stats.json", mdg_parsed_dir)
+            with open(f"{path}/{folder}/Stats/Stats.json") as fin:
+                stats = json.load(fin)
+            stats["RunId"] = f"{stats['RunId']} ({folder})"
+            with open(f"{mdg_parsed_dir}/Stats.json", "w") as fout:
+                json.dump(stats, fout, indent=2)
         except Exception as e:
             print(e)
-    elif runtype == "PacBio":
+    elif sequencing_platform == "pacbio":
         try:
             generated = False
             try:
@@ -550,7 +644,7 @@ def move_module_files(path, project, mdg_parsed_dir, unaligned_folder, runtype):
                 print(f"An error occurred: {e}")
 
             if generated:
-                report_path = f"{path}/{get_cell(path, project)}/hifi_reads/read_seg_iso_seq/cromwell_out/outputs"
+                report_path = f"{path}/{folder}/hifi_reads/read_seg_iso_seq/cromwell_out/outputs"
                 reports = os.listdir(report_path)
                 for report in reports:
                     if report.endswith(".csv") or report.endswith(".json"):
@@ -583,17 +677,15 @@ def index_containing_substring(the_list, substring):
     raise ValueError(f"{substring} not found")
 
 
-def get_cell(path, project):
-    df = pd.read_csv(f"{path}/PA_Logs/runinfo.csv", header=1)
-    line = df[df["project"] == project].index[0]
-    cell = df.loc[line, "cell"]
-    return f"1_{cell}"
-
-
 def post_process_csv(mdg_parsed_dir):
+    """
+    Tidies every .csv and .tsv table in the folder: drops duplicate rows and empty columns,
+    and turns the pandas index column into a 1-based "No." column
+    """
     for x in os.listdir(mdg_parsed_dir):
-        if x.endswith(".csv"):
-            df = pd.read_csv(f"{mdg_parsed_dir}/{x}")
+        if x.endswith((".csv", ".tsv")):
+            read_args = TSV_ARGS if x.endswith(".tsv") else {}
+            df = pd.read_csv(f"{mdg_parsed_dir}/{x}", **read_args)
 
             # drop all duplicates
             df = df.drop_duplicates()
@@ -609,4 +701,4 @@ def post_process_csv(mdg_parsed_dir):
                 df["No."] += offset
             
             # Write results
-            df.to_csv(f"{mdg_parsed_dir}/{x}", index=False)
+            df.to_csv(f"{mdg_parsed_dir}/{x}", index=False, **read_args)

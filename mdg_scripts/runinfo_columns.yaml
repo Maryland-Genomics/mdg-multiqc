@@ -1,0 +1,74 @@
+# Columns for the report tables built from PA_Logs/runinfo.json.
+#
+# Each entry is "Column Title: field". Columns appear in the order listed here, and
+# columns that are empty for every row are dropped from the report.
+#
+# A field is a dot-separated path into a runinfo.json entry, for example
+# "library_pool.index_set.index1". You don't need to add ".value" at the end.
+#   - A path that passes through a list (like specimen_work_order) collects the value from
+#     every item and joins them with "; ".
+#   - A list of fields joins their values with "-", e.g. [index_set.index1, index_set.index2].
+#   - Fields starting with "_" are not in the JSON; they come from where the row was found:
+#       _lane        lane number (Illumina)
+#       _cell        cell folder, e.g. 1_A01 (PacBio)
+#       _library_id  the library's key in "libraries", e.g. IL20656-001
+#
+# A field that does not exist in runinfo.json stops the script with an error naming the column.
+
+# Sample Information table: one row per library per lane (Illumina) or per cell (PacBio).
+# Paths are relative to an entry in "libraries".
+sample_info:
+  illumina:
+    Lane: _lane
+    Sample: sample.name
+    Library: _library_id
+    Pool Name: library_pool.name
+    Library Index: index_set.index_name
+    External ID: sample.specimen_external_id
+    Strain: strain
+    Library Type: library_type
+    Size (bp): size
+    Species: species
+    Sample Name: sample.specimen_name
+    Library Index Type: index_set.index_type
+    Library Index Sequence: [index_set.index1, index_set.index2]
+    Premade Pool: library_pool.pre_made_pool
+    Pool Index: library_pool.index_set.index_name
+    Pool Index 1: library_pool.index_set.index1
+    Pool Index 2: library_pool.index_set.index2
+    Library Prep Kit: library_prep.library_prep_kit
+    Sample Index: sample.index_set.index_name
+    Sample Index Sequence: [sample.index_set.index1, sample.index_set.index2]
+    Read Pairs (M): specimen_work_order.requested_read_pairs_millions
+    Control Projects: control_projects
+    Library Category: library_category
+    Primer: primer_set.name
+    Comments: library_prep.comments
+  pacbio:
+    Cell: _cell
+    Sample: sample.name
+    Library: _library_id
+    Pool Name: library_pool.name
+    Library Index: index_set.index_name
+    External ID: sample.specimen_external_id
+    Strain: strain
+    Library Type: library_type
+    Size (bp): size
+    Species: species
+    Sample Name: sample.specimen_name
+    Library Prep Kit: library_prep.library_prep_kit
+    Requested SMRT Cells: specimen_work_order.requested_smrt_cells
+    Control Projects: control_projects
+    Library Category: library_category
+    Comments: library_prep.comments
+
+# Work Order table: one row per work order on this project's libraries.
+# Paths are relative to a library's specimen_work_order[].work_order entry.
+# A "Sample Count" column (this project's libraries plus its control libraries) is always added at the end.
+work_order:
+  Work Order: name
+  WO PI: pi
+  WO Submitter: submitter
+  WO Additional Contact(s): additional_contacts
+  WO Billing Contact: billing_contact
+  Quote Number: quote

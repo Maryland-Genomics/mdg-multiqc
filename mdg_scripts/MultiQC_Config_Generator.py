@@ -1,20 +1,20 @@
 import yaml
 import os
 import pandas as pd
-import numpy as np
+import MDG_Run_Parser
 
 top_hits_fields : list[str] = []
 lane_image_fields : list[str] = []
 lane_image_fn : list[str] = []
 plot_field_and_image_dict : dict = {}
 
-def generate_config(p_path : str, p_project : str, p_runtype : str, p_unaligned_folder : str, p_outdir : str):
+def generate_config(p_path : str, p_project : str, p_sequencing_platform : str, p_folders : list[str], p_outdir : str):
     project = p_project
     path  = p_path
-    runtype = p_runtype
-    unaligned_folder = p_unaligned_folder
+    sequencing_platform = p_sequencing_platform
+    folders = p_folders
     config_data = {
-        "title": "Illumina Run Report" if runtype == "Illumina" else "PacBio Run Report",
+        "title": "Illumina Run Report" if sequencing_platform == "illumina" else "PacBio Run Report",
         # report header info?
         "max_table_rows": 2000,
         "log_filesize_limit": 50000000000,
@@ -34,9 +34,9 @@ def generate_config(p_path : str, p_project : str, p_runtype : str, p_unaligned_
             }
         },
         "table_cond_formatting_colours": [{"green": "#4CAF50"}, {"yellow": "#FFC107"}, {"red": "#F44336"}],
-        "custom_data": get_custom_data(path, project, runtype, unaligned_folder),
-        "sp": get_search_path(runtype),
-        "report_section_order": get_report_section_order(runtype),
+        "custom_data": get_custom_data(path, project, sequencing_platform, folders, p_outdir),
+        "sp": get_search_path(sequencing_platform),
+        "report_section_order": get_report_section_order(sequencing_platform),
         "custom_content": {
             "order": ["work_order_info", "sequencing_results", "read_stats_parent", "sequencing_plots",
                       "mdg_processing_and_qc", "megablast_qc_parent", "secondary_analysis"]
@@ -44,13 +44,13 @@ def generate_config(p_path : str, p_project : str, p_runtype : str, p_unaligned_
         "module_order": ["bcl2fastq", "fastqc", "cutadapt",
                          "trimmomatic","cellranger", "spaceranger", "isoseq"],
         "remove_sections": ["undetermined_by_lane", "fastqc_per_base_sequence_content"],
-        "software_versions": get_software_versions(runtype),
+        "software_versions": get_software_versions(sequencing_platform),
     }
     with open(f'{p_outdir}/multiqc_config_{project}.yaml', 'w') as file:
         yaml.dump(config_data, file)
 
 
-def get_custom_data(path, project, runtype, unaligned_folder) -> dict:
+def get_custom_data(path, project, sequencing_platform, folders, outdir) -> dict:
     custom_data = {
         "mdg_processing_and_qc": {
             "section_name": "MDG Processing and QC",
@@ -82,6 +82,7 @@ def get_custom_data(path, project, runtype, unaligned_folder) -> dict:
         },
         "sample_info": {
             "section_name": "Sample Information",
+            "file_format": "tsv",
             "parent_id": "work_order_info",
             "parent_name": "Work Order Information",
         },
@@ -96,6 +97,7 @@ def get_custom_data(path, project, runtype, unaligned_folder) -> dict:
         },
         "work_order_submission": {
             "section_name": "Work Order Submission",
+            "file_format": "tsv",
             "parent_id": "work_order_info",
         },
         "polymerase_rs": {
@@ -110,31 +112,31 @@ def get_custom_data(path, project, runtype, unaligned_folder) -> dict:
         },
     }
 
-    # Add top hits tables (Contingent on Illumina Parser running first)
-    if runtype == "Illumina":
-        all_tophits = f"{path}/{unaligned_folder}/QA/Project_{project}/MDG_Run_Parsed_Files/all_tophits.csv"
-    elif runtype == "PacBio":
-        all_tophits = f"{path}/Project_{project}_MDG_Run_Parsed_Files/all_tophits.csv"
-    try:
-        df = pd.read_csv(all_tophits)
-        libraries = df["Specimen Name"]
-
-        for (i, topHits) in enumerate(libraries):
+    # Add top hits tables (Contingent on MDG_Run_Parser running first). Folders are read in the
+    # same order the parser wrote them, so index i matches the parser's *_tophits_{i}.csv files.
+    for folder in folders:
+        all_tophits = f"{MDG_Run_Parser.get_data_dir(outdir, folder)}/all_tophits.csv"
+        try:
+            df = pd.read_csv(all_tophits)
+        except Exception as e:
+            print(e)
+            continue
+        for topHits in df["Specimen Name"]:
+            i = len(top_hits_fields)
             temp_dict = {
                 f"top_hits_{i}": {
                     "section_name": topHits,
                     "parent_id": "megablast_qc_parent",
                 }
             }
-            custom_data.update(temp_dict) 
+            custom_data.update(temp_dict)
             top_hits_fields.append(f"top_hits_{i}")
-    except Exception as e:
-        print(e)
 
     try:
         # Add lane images
-        if runtype == "Illumina":
-            for lane in get_lanes(path):
+        if sequencing_platform == "illumina":
+            runinfo = MDG_Run_Parser.load_runinfo(path)
+            for lane in MDG_Run_Parser.get_lanes(runinfo, project):
                 for image in os.listdir(f"{path}/PA_Logs/images"):
                     index = image.find(f"_{lane}_")
                     if index != -1:
@@ -145,16 +147,16 @@ def get_custom_data(path, project, runtype, unaligned_folder) -> dict:
                         match image_type:
                             case "flowcell-Intensity.png":
                                 field = f"lane_{lane}_flowcell_intensity"
-                                section_name = f"Lane {lane} Flowcell Intensity"
+                                section_name = f"Flowcell Intensity (Lane {lane})"
                             case "Intensity-by-cycle_Intensity.png":
                                 field = f"lane_{lane}_intensity_by_cycle"
-                                section_name = f"Lane {lane} Intensity By Cycle"
+                                section_name = f"Intensity By Cycle (Lane {lane})"
                             case "ClusterCount-by-lane.png":
                                 field = f"lane_{lane}_cluster_count_by_lane"
-                                section_name = f"Lane {lane} Cluster Count By Lane"
+                                section_name = f"Cluster Count By Lane (Lane {lane})"
                             case "q-heat-map.png":
                                 field = f"lane_{lane}_q_heat_map"
-                                section_name = f"Lane {lane} Q Heat Map"
+                                section_name = f"Q Heat Map (Lane {lane})"
                         if field != None and section_name != None:
                             temp_dict = {
                                 field : {
@@ -166,7 +168,7 @@ def get_custom_data(path, project, runtype, unaligned_folder) -> dict:
                             custom_data.update(temp_dict)
                             lane_image_fields.append(field)
                             lane_image_fn.append(f"_{lane}_{image_type}")
-        elif runtype == "PacBio":
+        elif sequencing_platform == "pacbio":
             plots = {
                 "hexbin_length_plot": "Hexbin Length Plot",
                 "base_yield_plot": "Base Yield Plot",
@@ -180,28 +182,23 @@ def get_custom_data(path, project, runtype, unaligned_folder) -> dict:
                 "concordance_plot": "Concordance Plot",
                 "5mc_detections_hist": "5mC Detections Histogram",
             }
-            for key, value in plots.items():
-                temp_dict = {
-                    key: {
-                        "section_name": value,
+            # One section per plot per cell; MDG_Run_Parser prefixes each copied image with its cell
+            for cell in folders:
+                for key, value in plots.items():
+                    image = f"{key}.hexbin.png" if key == "ccs_readlength_qv_hist2d" else f"{key}.png"
+                    field = f"{key}_{cell}"
+                    custom_data[field] = {
+                        "section_name": f"{value} ({cell})",
                         "parent_id": "sequencing_plots",
                         "parent_name": "Sequencing Plots",
                     }
-                }
-                custom_data.update(temp_dict)
-            plot_fields = list(plots.keys())
-            plot_files = list(plots.keys())
-            plot_files[plot_files.index("ccs_readlength_qv_hist2d")] += ".hexbin"
-            for i in range(len(plot_files)):
-                plot_files[i] += ".png"
-            plot_dict = dict(zip(plot_fields, plot_files))
-            plot_field_and_image_dict.update(plot_dict)
+                    plot_field_and_image_dict[field] = f"{cell}_{image}"
     except Exception as e:
         print(e)
     return custom_data
 
 
-def get_search_path(runtype):
+def get_search_path(sequencing_platform):
     sp = {
         "sequencing_info": {
             "fn": "sequencing_info.csv"
@@ -210,7 +207,7 @@ def get_search_path(runtype):
             "fn": "summary_clean.csv"
         },
         "sample_info": {
-            "fn": "runinfo_clean.csv"
+            "fn": "runinfo_clean.tsv"
         },
         "read_stats": {
             "fn": "trimming.logs_clean.csv"
@@ -219,7 +216,7 @@ def get_search_path(runtype):
             "fn": "all_tophits.csv"
         },
         "work_order_submission": {
-            "fn": "work_order_info.csv"
+            "fn": "work_order_info.tsv"
         },
         "polymerase_rs": {
             "fn": "pf_polymerase_read_stats.csv"
@@ -241,7 +238,7 @@ def get_search_path(runtype):
         }
         sp.update(temp_dict)
 
-    if (runtype == "Illumina"):
+    if (sequencing_platform == "illumina"):
         for (i, field) in enumerate(lane_image_fields):
             temp_dict = {
                 field: {
@@ -249,7 +246,7 @@ def get_search_path(runtype):
                 }
             }
             sp.update(temp_dict)
-    elif (runtype == "PacBio"):
+    elif (sequencing_platform == "pacbio"):
         for key, value in plot_field_and_image_dict.items():
             temp_dict = {
                 key: {
@@ -260,7 +257,7 @@ def get_search_path(runtype):
     return sp
 
 
-def get_report_section_order(runtype):
+def get_report_section_order(sequencing_platform):
     report_section_order = {
         "work_order_submission": {
             "before": "sample_info"
@@ -290,7 +287,7 @@ def get_report_section_order(runtype):
         }
         report_section_order.update(temp_dict)
 
-    if runtype == "Illumina":
+    if sequencing_platform == "illumina":
         for (i, lane) in enumerate(lane_image_fields):
             temp_dict = {
                 lane: {
@@ -298,7 +295,7 @@ def get_report_section_order(runtype):
                 }
             }
             report_section_order.update(temp_dict)
-    elif runtype == "PacBio":
+    elif sequencing_platform == "pacbio":
         for i, key in enumerate(plot_field_and_image_dict):
             temp_dict = {
                 key: {
@@ -308,27 +305,19 @@ def get_report_section_order(runtype):
     return report_section_order
 
 
-def get_software_versions(runtype):
+def get_software_versions(sequencing_platform):
     software_versions = {
         "MultiQC": "1.36.dev0/citePhilip Ewels, Måns Magnusson, Sverker Lundin, Max Käller, MultiQC: summarize analysis results for multiple tools and samples in a single report, Bioinformatics, Volume 32, Issue 19, October 2016, Pages 3047–3048, https://doi.org/10.1093/bioinformatics/btw354",
     }
     temp_dict = {}
-    if runtype == "Illumina":
+    if sequencing_platform == "illumina":
         temp_dict = {
             "bcl2fastq": "2.20.0.422",
             "Trimmomatic": "0.33",
         }
-    elif runtype == "PacBio":
+    elif sequencing_platform == "pacbio":
         temp_dict = {
             "Iso-Seq": "1.0"
         }
     software_versions.update(temp_dict)
     return software_versions
-
-
-def get_lanes(path):
-    # Get every unique lane in run
-    runinfo_df = pd.read_csv(f"{path}/PA_Logs/runinfo.csv", header=1)
-    lanes = runinfo_df["lane"]
-    unique_lanes = np.unique(lanes)
-    return unique_lanes
