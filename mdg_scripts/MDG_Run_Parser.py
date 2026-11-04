@@ -188,29 +188,26 @@ def parse_sequencing_info(path, mdg_parsed_dir):
     }
 
     # Assign dataFrame items
-    data["Run ID"].append(info_root.find("Run").attrib.get("Id"))
-    data["Instrument"].append(param_root.find("InstrumentType").text)
-    if param_root.find("InstrumentSerialNumber").text == "VL00448":
-        data["Flow Cell"].append(param_root.find("FlowCellMode").text)
-    elif param_root.find("InstrumentSerialNumber").text == "LH01184":
-        data["Flow Cell"].append(param_root.find("RecipeVersion").text)
+    run_parameters_xml = f"{path}/RunParameters.xml"
+    run_info_xml = f"{path}/RunInfo.xml"
+    data["Run ID"].append(find_xml(info_root, "Run", run_info_xml).get("Id"))
+    data["Instrument"].append(find_xml_text(param_root, "InstrumentType", run_parameters_xml))
+    serial_number = find_xml_text(param_root, "InstrumentSerialNumber", run_parameters_xml)
+    if serial_number == "VL00448":
+        data["Flow Cell"].append(find_xml_text(param_root, "FlowCellMode", run_parameters_xml))
+    elif serial_number == "LH01184":
+        data["Flow Cell"].append(find_xml_text(param_root, "RecipeVersion", run_parameters_xml))
     data["Platform"].append("Illumina")
 
-    # Parse run recipe to string
-    run_recipe = ""
+    # Parse run recipe to string, e.g. 151:10:10:151
     planned_cycles = param_root.find("PlannedCycles")
-    if planned_cycles == None:
-        planned_cycles = param_root.find("PlannedReads")
-        for i, cycle in enumerate(planned_cycles):
-            if not i == 0:
-                run_recipe += ":"
-            run_recipe += cycle.get("Cycles")
+    if planned_cycles is not None:
+        cycles = [cycle.text for cycle in planned_cycles]
     else:
-        for i, cycle in enumerate(planned_cycles):
-            if not i == 0:
-                run_recipe += ":"
-            run_recipe += cycle.text
-    data["Run Recipe"].append(run_recipe)
+        cycles = [read.get("Cycles") for read in find_xml(param_root, "PlannedReads", run_parameters_xml)]
+    if any(cycle is None for cycle in cycles):
+        raise ValueError(f"Missing cycle count in PlannedCycles/PlannedReads of {run_parameters_xml}")
+    data["Run Recipe"].append(":".join(str(cycle) for cycle in cycles))
 
     # Remove copies
     os.remove(run_param)
@@ -219,6 +216,26 @@ def parse_sequencing_info(path, mdg_parsed_dir):
     # Convert to csv
     df = pd.DataFrame(data)
     df.to_csv(f"{mdg_parsed_dir}/sequencing_info.csv", index=False)
+
+
+def find_xml(root, tag, xml_file):
+    """
+    Return the first <tag> element under root, raising a clear error if the file doesn't have one
+    """
+    element = root.find(tag)
+    if element is None:
+        raise ValueError(f"<{tag}> not found in {xml_file}")
+    return element
+
+
+def find_xml_text(root, tag, xml_file):
+    """
+    Return the text of the first <tag> element under root, raising a clear error if it is missing or empty
+    """
+    text = find_xml(root, tag, xml_file).text
+    if text is None:
+        raise ValueError(f"<{tag}> is empty in {xml_file}")
+    return text
 
 
 def parse_flowcell_info(path, mdg_parsed_dir):
@@ -293,7 +310,7 @@ def parse_megablastqc_info(path, mdg_parsed_dir, project, sequencing_platform, f
         # Write data to new csv file. Row numbers continue from earlier Unaligned folders: MultiQC
         # merges every all_tophits.csv into one table keyed on this column, so repeats would overwrite rows.
         df = pd.DataFrame(data)
-        df.index = range(start_count + 1, start_count + 1 + len(df))
+        df.index = pd.RangeIndex(start_count + 1, start_count + 1 + len(df))
         df.to_csv(f"{mdg_parsed_dir}/all_tophits.csv", index=True, index_label="No.")
     except Exception as e:
         print(e)
@@ -448,6 +465,8 @@ def generate_sample_info(runinfo, mdg_parsed_dir, project, sequencing_platform, 
         placements = [("_lane", lane, runinfo["lanes"][lane]) for lane in get_lanes(runinfo, project)]
     elif sequencing_platform == "pacbio":
         placements = [("_cell", cell, runinfo["cells"][cell]) for cell in get_cells(runinfo, project)]
+    else:
+        raise ValueError(f"Unsupported sequencing platform '{sequencing_platform}'")
 
     rows = []
     for context_key, location, info in placements:
@@ -474,15 +493,21 @@ def generate_read_stats(path, mdg_parsed_dir, project, sequencing_platform):
 
 def generate_pacBio_read_stats(path, mdg_parsed_dir, project):
     # Find HiFi Stats
+    run_stats = f"{path}/PA_Logs/run_stats.csv"
     splitIndex = None
+    line_count = 0
 
-    with open (f"{path}/PA_Logs/run_stats.csv", "r") as input:
+    with open(run_stats, "r") as input:
         for i, line in enumerate(input):
+            line_count = i + 1
             if line.find("HiFi Stats:") != -1:
                 splitIndex = i
+    if splitIndex is None:
+        raise ValueError(f"'HiFi Stats:' line not found in {run_stats}")
 
-    pf_df = pd.read_csv(f"{path}/PA_Logs/run_stats.csv", header=2 ,skiprows= lambda x: x >= splitIndex)
-    hifi_df = pd.read_csv(f"{path}/PA_Logs/run_stats.csv", header = splitIndex + 1)
+    # Polymerase stats are everything above the "HiFi Stats:" line, HiFi stats everything below it
+    pf_df = pd.read_csv(run_stats, header=2, skiprows=range(splitIndex, line_count))
+    hifi_df = pd.read_csv(run_stats, header=splitIndex + 1)
 
     # Drop rows for different projects
     pf_df.drop(pf_df[pf_df["Project"] != project].index, inplace=True)

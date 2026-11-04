@@ -258,7 +258,7 @@ def get_search_path(sequencing_platform):
 
 
 def get_report_section_order(sequencing_platform):
-    report_section_order = {
+    report_section_order: dict[str, dict[str, str | int]] = {
         "work_order_submission": {
             "before": "sample_info"
         },
@@ -279,22 +279,16 @@ def get_report_section_order(sequencing_platform):
         },
     }
     for (i, top_hits) in enumerate(top_hits_fields):
-        temp_dict = {
-            top_hits: {
-                "order": (i + 1) * 10,
-                #"before": f"{top_hits_fields[i + 1]}" if i < (len(top_hits_fields) - 1) else ""
-            }
+        report_section_order[top_hits] = {
+            "order": (i + 1) * 10,
+            #"before": f"{top_hits_fields[i + 1]}" if i < (len(top_hits_fields) - 1) else ""
         }
-        report_section_order.update(temp_dict)
 
     if sequencing_platform == "illumina":
         for (i, lane) in enumerate(lane_image_fields):
-            temp_dict = {
-                lane: {
-                    "order": (i + 1) * 10
-                }
+            report_section_order[lane] = {
+                "order": (i + 1) * 10
             }
-            report_section_order.update(temp_dict)
     elif sequencing_platform == "pacbio":
         for i, key in enumerate(plot_field_and_image_dict):
             temp_dict = {
