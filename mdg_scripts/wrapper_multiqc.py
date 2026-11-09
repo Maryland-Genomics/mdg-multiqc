@@ -1,5 +1,6 @@
 import argparse
 import logging
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -33,13 +34,22 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("-c", "--cell",
                         help="Only use this cell folder, e.g. 1_A01 (PacBio only). By default every cell containing the project is used",
                         )
-    parser.add_argument("-nr", "--noregen", 
+    parser.add_argument("-a", "--analysis",
+                        type=Path,
+                        help="File listing analysis files to include, one per line as SOURCE_PATH,DEST_NAME. "
+                             "Files are copied to PA_Logs/mdg-reports/<PROJECT>/analysis_data",
+                        )
+    parser.add_argument("-nr", "--noregen",
                         action="store_true", 
                         help="Don't regenerate parsed files and MultiQC config"
                         )
     parser.add_argument("-nm", "--nomultiqc", 
                         action="store_true", 
                         help="Don't run MultiQC"
+                        )
+    parser.add_argument("--debug",
+                        action="store_true",
+                        help="Show the full traceback when the script fails"
                         )
     return parser.parse_args()
 
@@ -96,7 +106,56 @@ def find_cells(run_path: Path, runinfo: dict, project: str, requested: Optional[
     return cells
 
 
+def read_analysis_list(list_file: Path) -> list[tuple[Path, str]]:
+    """
+    Parse the analysis list file: one SOURCE_PATH,DEST_NAME per line.
+    Blank lines and lines starting with # are ignored. Every line is validated
+    before anything is copied, so a bad list never leaves a half-copied folder.
+    """
+    if not list_file.is_file():
+        raise FileNotFoundError(f"Analysis list file not found: {list_file}")
+
+    entries: list[tuple[Path, str]] = []
+    seen: dict[str, int] = {}
+    for line_no, raw in enumerate(list_file.read_text().splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        where = f"{list_file} line {line_no}"
+        # Split on the last comma so a comma inside the source path still works
+        if "," not in line:
+            raise ValueError(f"{where}: expected SOURCE_PATH,DEST_NAME but found no comma: {line}")
+        source_str, dest_name = (part.strip() for part in line.rsplit(",", 1))
+        if not source_str or not dest_name:
+            raise ValueError(f"{where}: source path and destination name must both be set: {line}")
+        if "/" in dest_name or dest_name in (".", ".."):
+            raise ValueError(f"{where}: destination name must be a plain file name, not a path: {dest_name}")
+        if dest_name in seen:
+            raise ValueError(f"{where}: destination name {dest_name} already used on line {seen[dest_name]}")
+        source = Path(source_str)
+        if not source.is_file():
+            raise FileNotFoundError(f"{where}: source file not found: {source}")
+        seen[dest_name] = line_no
+        entries.append((source, dest_name))
+
+    if not entries:
+        raise ValueError(f"Analysis list file {list_file} has no entries")
+    return entries
+
+
+def copy_analysis_files(entries: list[tuple[Path, str]], analysis_dir: Path) -> None:
+    """Replace analysis_dir with fresh copies of the listed files, so it always matches the list."""
+    if analysis_dir.exists():
+        shutil.rmtree(analysis_dir)
+    analysis_dir.mkdir(parents=True)
+    for source, dest_name in entries:
+        log.info("Copying %s -> %s", source, analysis_dir / dest_name)
+        shutil.copy2(source, analysis_dir / dest_name)
+
+
 def run_multiqc(search_dirs: list[Path], config_file: Path, outdir: Path, project: str) -> None:
+    if shutil.which("multiqc") is None:
+        raise FileNotFoundError("multiqc not found on PATH; activate the MultiQC environment first")
     if not config_file.is_file():
         raise FileNotFoundError(f"MultiQC config not found: {config_file} (run without --noregen to generate it)")
     missing = [str(d) for d in search_dirs if not d.is_dir()]
@@ -119,9 +178,7 @@ def run_multiqc(search_dirs: list[Path], config_file: Path, outdir: Path, projec
     subprocess.run(cmd, check=True)
 
 
-def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    args = get_args()
+def main(args: argparse.Namespace) -> None:
     run_path: Path = args.input.resolve()
     project: str = args.project
 
@@ -153,6 +210,14 @@ def main() -> None:
             search_dirs.append(run_path / folder / "QA" / f"Project_{project}")
         search_dirs.append(Path(MDG_Run_Parser.get_data_dir(str(outdir), folder)))
 
+    # Analysis files are copied whenever --analysis is given (even with --noregen), and a
+    # previously copied analysis_data folder is still included when --analysis is omitted
+    analysis_dir = outdir / "analysis_data"
+    if args.analysis:
+        copy_analysis_files(read_analysis_list(args.analysis), analysis_dir)
+    if analysis_dir.is_dir():
+        search_dirs.append(analysis_dir)
+
     if not args.noregen:
         outdir.mkdir(parents=True, exist_ok=True)
         MDG_Run_Parser.parse(str(run_path), project, sequencing_platform, folders, str(outdir))
@@ -163,4 +228,14 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    cli_args = get_args()
+    try:
+        main(cli_args)
+    except Exception as e:
+        # One readable line by default; --debug shows where it failed
+        if cli_args.debug:
+            log.exception("Report generation failed")
+        else:
+            log.error("Report generation failed: %s: %s (rerun with --debug for the full traceback)", type(e).__name__, e)
+        sys.exit(1)

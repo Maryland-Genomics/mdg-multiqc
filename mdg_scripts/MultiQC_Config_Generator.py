@@ -1,7 +1,10 @@
+import logging
 import yaml
 import os
 import pandas as pd
 import MDG_Run_Parser
+
+log = logging.getLogger(__name__)
 
 top_hits_fields : list[str] = []
 lane_image_fields : list[str] = []
@@ -72,6 +75,7 @@ def get_custom_data(path, project, sequencing_platform, folders, outdir) -> dict
         },
         "sequencing_info": {
             "section_name": "Sequencing Info",
+            "file_format": "tsv",
             "parent_id": "sequencing_results",
             "parent_name": "Sequencing Results",
         },
@@ -116,11 +120,9 @@ def get_custom_data(path, project, sequencing_platform, folders, outdir) -> dict
     # same order the parser wrote them, so index i matches the parser's *_tophits_{i}.csv files.
     for folder in folders:
         all_tophits = f"{MDG_Run_Parser.get_data_dir(outdir, folder)}/all_tophits.csv"
-        try:
-            df = pd.read_csv(all_tophits)
-        except Exception as e:
-            print(e)
-            continue
+        if not os.path.isfile(all_tophits):
+            continue  # MDG_Run_Parser already warned that this folder has no topHits files
+        df = pd.read_csv(all_tophits)
         for topHits in df["Specimen Name"]:
             i = len(top_hits_fields)
             temp_dict = {
@@ -132,76 +134,72 @@ def get_custom_data(path, project, sequencing_platform, folders, outdir) -> dict
             custom_data.update(temp_dict)
             top_hits_fields.append(f"top_hits_{i}")
 
-    try:
-        # Add lane images
-        if sequencing_platform == "illumina":
-            runinfo = MDG_Run_Parser.load_runinfo(path)
-            for lane in MDG_Run_Parser.get_lanes(runinfo, project):
-                for image in os.listdir(f"{path}/PA_Logs/images"):
-                    index = image.find(f"_{lane}_")
-                    if index != -1:
-                        field = None
-                        section_name = None
-                        index += 3
-                        image_type = image[index:]
-                        match image_type:
-                            case "flowcell-Intensity.png":
-                                field = f"lane_{lane}_flowcell_intensity"
-                                section_name = f"Flowcell Intensity (Lane {lane})"
-                            case "Intensity-by-cycle_Intensity.png":
-                                field = f"lane_{lane}_intensity_by_cycle"
-                                section_name = f"Intensity By Cycle (Lane {lane})"
-                            case "ClusterCount-by-lane.png":
-                                field = f"lane_{lane}_cluster_count_by_lane"
-                                section_name = f"Cluster Count By Lane (Lane {lane})"
-                            case "q-heat-map.png":
-                                field = f"lane_{lane}_q_heat_map"
-                                section_name = f"Q Heat Map (Lane {lane})"
-                        if field != None and section_name != None:
-                            temp_dict = {
-                                field : {
-                                    "section_name": section_name,
-                                    "parent_id": "sequencing_plots",
-                                    "parent_name": "Sequencing Plots",
-                                }
+    # Add lane images
+    if sequencing_platform == "illumina":
+        runinfo = MDG_Run_Parser.load_runinfo(path)
+        for lane in MDG_Run_Parser.get_lanes(runinfo, project):
+            for image in os.listdir(f"{path}/PA_Logs/images"):
+                index = image.find(f"_{lane}_")
+                if index != -1:
+                    field = None
+                    section_name = None
+                    image_type = image[index + len(f"_{lane}_"):]
+                    match image_type:
+                        case "flowcell-Intensity.png":
+                            field = f"lane_{lane}_flowcell_intensity"
+                            section_name = f"Flowcell Intensity (Lane {lane})"
+                        case "Intensity-by-cycle_Intensity.png":
+                            field = f"lane_{lane}_intensity_by_cycle"
+                            section_name = f"Intensity By Cycle (Lane {lane})"
+                        case "ClusterCount-by-lane.png":
+                            field = f"lane_{lane}_cluster_count_by_lane"
+                            section_name = f"Cluster Count By Lane (Lane {lane})"
+                        case "q-heat-map.png":
+                            field = f"lane_{lane}_q_heat_map"
+                            section_name = f"Q Heat Map (Lane {lane})"
+                    if field != None and section_name != None:
+                        temp_dict = {
+                            field : {
+                                "section_name": section_name,
+                                "parent_id": "sequencing_plots",
+                                "parent_name": "Sequencing Plots",
                             }
-                            custom_data.update(temp_dict)
-                            lane_image_fields.append(field)
-                            lane_image_fn.append(f"_{lane}_{image_type}")
-        elif sequencing_platform == "pacbio":
-            plots = {
-                "hexbin_length_plot": "Hexbin Length Plot",
-                "base_yield_plot": "Base Yield Plot",
-                "ccs_readlength_qv_hist2d": "CCS Read Length QV Histogram",
-                "readLenDist0": "Read Length Distribution",
-                "ccs_all_readlength_hist_plot": "CCS All Read Length Histogram",
-                "ccs_npasses_hist": "CCS Number of Passes Histogram",
-                "ccs_accuracy_hist": "CCS Accuracy Histogram",
-                "ccs_combined_readlength_hist_plot": "CCS Combined Read Length Histogram",
-                "readlength_plot": "Read Length Plot",
-                "concordance_plot": "Concordance Plot",
-                "5mc_detections_hist": "5mC Detections Histogram",
-            }
-            # One section per plot per cell; MDG_Run_Parser prefixes each copied image with its cell
-            for cell in folders:
-                for key, value in plots.items():
-                    image = f"{key}.hexbin.png" if key == "ccs_readlength_qv_hist2d" else f"{key}.png"
-                    field = f"{key}_{cell}"
-                    custom_data[field] = {
-                        "section_name": f"{value} ({cell})",
-                        "parent_id": "sequencing_plots",
-                        "parent_name": "Sequencing Plots",
-                    }
-                    plot_field_and_image_dict[field] = f"{cell}_{image}"
-    except Exception as e:
-        print(e)
+                        }
+                        custom_data.update(temp_dict)
+                        lane_image_fields.append(field)
+                        lane_image_fn.append(f"_{lane}_{image_type}")
+    elif sequencing_platform == "pacbio":
+        plots = {
+            "hexbin_length_plot": "Hexbin Length Plot",
+            "base_yield_plot": "Base Yield Plot",
+            "ccs_readlength_qv_hist2d": "CCS Read Length QV Histogram",
+            "readLenDist0": "Read Length Distribution",
+            "ccs_all_readlength_hist_plot": "CCS All Read Length Histogram",
+            "ccs_npasses_hist": "CCS Number of Passes Histogram",
+            "ccs_accuracy_hist": "CCS Accuracy Histogram",
+            "ccs_combined_readlength_hist_plot": "CCS Combined Read Length Histogram",
+            "readlength_plot": "Read Length Plot",
+            "concordance_plot": "Concordance Plot",
+            "5mc_detections_hist": "5mC Detections Histogram",
+        }
+        # One section per plot per cell; MDG_Run_Parser prefixes each copied image with its cell
+        for cell in folders:
+            for key, value in plots.items():
+                image = f"{key}.hexbin.png" if key == "ccs_readlength_qv_hist2d" else f"{key}.png"
+                field = f"{key}_{cell}"
+                custom_data[field] = {
+                    "section_name": f"{value} ({cell})",
+                    "parent_id": "sequencing_plots",
+                    "parent_name": "Sequencing Plots",
+                }
+                plot_field_and_image_dict[field] = f"{cell}_{image}"
     return custom_data
 
 
 def get_search_path(sequencing_platform):
     sp = {
         "sequencing_info": {
-            "fn": "sequencing_info.csv"
+            "fn": "sequencing_info.tsv"
         },
         "flow_cell_metrics": {
             "fn": "summary_clean.csv"
@@ -291,10 +289,8 @@ def get_report_section_order(sequencing_platform):
             }
     elif sequencing_platform == "pacbio":
         for i, key in enumerate(plot_field_and_image_dict):
-            temp_dict = {
-                key: {
-                    "order": (i + 1) * 10
-                }
+            report_section_order[key] = {
+                "order": (i + 1) * 10
             }
     return report_section_order
 

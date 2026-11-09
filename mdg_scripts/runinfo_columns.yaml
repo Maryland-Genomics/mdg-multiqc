@@ -12,8 +12,25 @@
 #       _lane        lane number (Illumina)
 #       _cell        cell folder, e.g. 1_A01 (PacBio)
 #       _library_id  the library's key in "libraries", e.g. IL20656-001
+#       _platform    platform display name, Illumina or PacBio
 #
 # A field that does not exist in runinfo.json stops the script with an error naming the column.
+
+# Sequencing Info table: one row describing the run.
+# Paths are relative to runinfo.json's "run" entry.
+sequencing_info:
+  illumina:
+    Run ID: run_id
+    Platform: _platform
+    Instrument: sequencer
+    Flow Cell: flow_cell
+    Run Recipe: run_recipe
+  pacbio:
+    Run ID: run_id
+    Platform: _platform
+    Instrument: sequencer
+    Sequencing Chemistry: sequencing_chemistry
+    Sequencing Kit Lot: sequencing_kit_lot
 
 # Sample Information table: one row per library per lane (Illumina) or per cell (PacBio).
 # Paths are relative to an entry in "libraries".
