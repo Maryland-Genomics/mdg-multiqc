@@ -1124,6 +1124,13 @@ spaceranger/count_html:
   - fn: "*.html"
     contents: '"command": "Space Ranger", "subcommand": "count"'
     num_lines: 20
+  # Space Ranger 3.0+ reports: the JSON data block sits near the end of the file
+  - fn: "*.html"
+    contents: '"pipeline":"Space Ranger • count"'
+    num_lines: 2000
+  - fn: "*.html"
+    contents: '"pipeline": "Space Ranger • count"'
+    num_lines: 2000
 stacks/gstacks:
   fn: "gstacks.log.distribs"
   contents: "BEGIN effective_coverages_per_sample"

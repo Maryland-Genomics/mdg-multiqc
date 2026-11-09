@@ -49,9 +49,12 @@ def parse_vdj_html(module: BaseMultiqcModule) -> int:
         try:
             version_pair = mydict["summary_tab"]["pipeline_info_table"]["rows"][-1]
             assert version_pair[0] == "Pipeline Version"
-            version_match = re.search(r"cellranger-([\d\.]+)", version_pair[1])
+            # Older reports give "cellranger-7.1.0", Cell Ranger 10+ gives a bare "10.0.0"
+            version_match = re.match(r"(?:cellranger-)?v?(\d+(?:\.\d+)*)", str(version_pair[1]).strip())
             if version_match:
                 module.add_software_version(version_match.group(1), s_name)
+            else:
+                log.warning(f"Unrecognised Cell Ranger version '{version_pair[1]}' in {f['fn']}")
         except (KeyError, AssertionError):
             log.debug(f"Unable to parse version for sample {s_name}")
 
