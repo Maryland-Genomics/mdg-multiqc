@@ -47,7 +47,7 @@ def generate_config(p_path : str, p_project : str, p_sequencing_platform : str, 
         "module_order": ["bcl2fastq", "fastqc", "cutadapt",
                          "trimmomatic","cellranger", "spaceranger", "isoseq"],
         "remove_sections": ["undetermined_by_lane", "fastqc_per_base_sequence_content"],
-        "software_versions": get_software_versions(sequencing_platform),
+        "software_versions": get_software_versions(sequencing_platform, folders, p_outdir),
     }
     with open(f'{p_outdir}/multiqc_config_{project}.yaml', 'w') as file:
         yaml.dump(config_data, file)
@@ -295,7 +295,7 @@ def get_report_section_order(sequencing_platform):
     return report_section_order
 
 
-def get_software_versions(sequencing_platform):
+def get_software_versions(sequencing_platform, folders, outdir):
     software_versions = {
         "MultiQC": "1.36.dev0/citePhilip Ewels, Måns Magnusson, Sverker Lundin, Max Käller, MultiQC: summarize analysis results for multiple tools and samples in a single report, Bioinformatics, Volume 32, Issue 19, October 2016, Pages 3047–3048, https://doi.org/10.1093/bioinformatics/btw354",
     }
@@ -305,9 +305,16 @@ def get_software_versions(sequencing_platform):
             "bcl2fastq": "2.20.0.422",
             "Trimmomatic": "0.33",
         }
-    elif sequencing_platform == "pacbio":
+    elif sequencing_platform == "pacbio" and isoseq_was_run(folders, outdir):
         temp_dict = {
             "Iso-Seq": "1.0"
         }
     software_versions.update(temp_dict)
     return software_versions
+
+
+def isoseq_was_run(folders, outdir):
+    """
+    True if MDG_Run_Parser copied Iso-Seq reports for any cell (contingent on it running first)
+    """
+    return any(os.path.isdir(f"{MDG_Run_Parser.get_data_dir(outdir, folder)}/isoseq") for folder in folders)

@@ -241,8 +241,10 @@ TOPHITS_COUNT_LINES = {
 TOPHITS_HEADER = re.compile(r"^QC Report \([^)]*\) for:[^:]+:(?P<library>[^:]+):(?:lane|cell):(?P<unit>[^:]+):")
 # Top species table row: read count, % reads, % hit reads, species
 TOPHITS_TABLE_ROW = re.compile(r"^(\d+)\t([\d.]+)\t([\d.]+)\t(.+)$")
-# PacBio barcode in the file name, e.g. m84050_..._s1.hifi_reads.bc2091.subset.fasta.blast.topHits.txt
-PACBIO_BARCODE = re.compile(r"\.hifi_reads\.([^.]+)\.subset\.")
+# PacBio file name: barcoded cells have the barcode after "hifi_reads", e.g.
+# m84050_..._s1.hifi_reads.bc2091.subset.fasta.blast.topHits.txt; unbarcoded cells have none, e.g.
+# m84050_..._s1.hifi_reads.subset.fasta.blast.topHits.txt
+PACBIO_BARCODE = re.compile(r"\.hifi_reads\.(?:(?P<barcode>[^.]+)\.)?subset\.")
 
 
 def find_tophits_files(path, project, sequencing_platform, folder):
@@ -323,8 +325,9 @@ def parse_tophits_file(tophits_file, runinfo, sequencing_platform):
     else:
         barcode = PACBIO_BARCODE.search(os.path.basename(tophits_file))
         if barcode is None:
-            raise format_error("no barcode ('.hifi_reads.<barcode>.subset.') in the file name")
-        row_id = barcode[1]
+            raise format_error("file name has neither '.hifi_reads.<barcode>.subset.' nor '.hifi_reads.subset.'")
+        # Unbarcoded cells hold one library, so the cell identifies the row
+        row_id = barcode["barcode"] or header["unit"]
 
     def value(label):
         """Text after "label:<tab>" on the one line starting with it"""
