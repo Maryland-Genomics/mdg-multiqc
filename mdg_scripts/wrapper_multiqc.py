@@ -4,106 +4,52 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 import MDG_Run_Parser
 import MultiQC_Config_Generator
+from MDG_Run_Parser import PLATFORMS, Runinfo
 
 log = logging.getLogger("wrapper_multiqc")
-
-SUPPORTED_PLATFORMS = ("illumina", "pacbio")
 
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run MultiQC and generate MDG tables/images")
-    parser.add_argument("-i", "--input", 
-                        required=True, 
-                        type=Path, 
-                        help="Path to run folder"
-                        )
-    parser.add_argument("-p", "--project", 
-                        required=True, 
-                        help="Project which MultiQC will interpret"
-                        )
-    parser.add_argument("-u", "--unaligned",
-                        help="Only use this Unaligned folder (Illumina only). By default every Unaligned folder containing the project is used",
-                        )
-    parser.add_argument("-c", "--cell",
-                        help="Only use this cell folder, e.g. 1_A01 (PacBio only). By default every cell containing the project is used",
-                        )
-    parser.add_argument("-a", "--analysis",
-                        type=Path,
-                        help="File listing analysis files to include, one per line as SOURCE_PATH,DEST_NAME. "
-                             "Files are copied to PA_Logs/mdg-reports/<PROJECT>/analysis_data",
-                        )
-    parser.add_argument("-nr", "--noregen",
-                        action="store_true", 
-                        help="Don't regenerate parsed files and MultiQC config"
-                        )
-    parser.add_argument("-nm", "--nomultiqc", 
-                        action="store_true", 
-                        help="Don't run MultiQC"
-                        )
-    parser.add_argument("--debug",
-                        action="store_true",
-                        help="Show the full traceback when the script fails"
-                        )
+    parser.add_argument("-i", "--input", required=True, type=Path, help="Path to run folder")
+    parser.add_argument("-p", "--project", required=True, help="Project which MultiQC will interpret")
+    parser.add_argument(
+        "-u",
+        "--unaligned",
+        help="Only use this Unaligned folder (Illumina only). By default every Unaligned folder containing the project is used",
+    )
+    parser.add_argument(
+        "-c",
+        "--cell",
+        help="Only use this cell folder, e.g. 1_A01 (PacBio only). By default every cell containing the project is used",
+    )
+    parser.add_argument(
+        "-a",
+        "--analysis",
+        type=Path,
+        help="File listing analysis files to include, one per line as SOURCE_PATH,DEST_NAME. "
+        "Files are copied to PA_Logs/mdg-reports/<PROJECT>/analysis_data",
+    )
+    parser.add_argument(
+        "-nr", "--noregen", action="store_true", help="Don't regenerate parsed files and MultiQC config"
+    )
+    parser.add_argument("-nm", "--nomultiqc", action="store_true", help="Don't run MultiQC")
+    parser.add_argument("--debug", action="store_true", help="Show the full traceback when the script fails")
     return parser.parse_args()
 
 
-def check_project(runinfo: dict, project: str) -> None:
+def check_project(runinfo: Runinfo, project: str) -> None:
     """Raise if the project is not listed in the run's PA_Logs/runinfo.json."""
     projects = runinfo["run"]["projects"]["value"]
     log.info("Projects in run: %s", projects)
     if project not in projects:
         raise ValueError(f"{project} is not a valid project for this run folder (found: {', '.join(projects)})")
-
-
-def find_unaligned_folders(run_path: Path, project: str, requested: Optional[str]) -> list[str]:
-    """
-    Return the Unaligned* folders that contain QA/Project_{project}, sorted by name.
-    If requested is given, return only that folder.
-    """
-    if requested:
-        project_qa = run_path / requested / "QA" / f"Project_{project}"
-        if not project_qa.is_dir():
-            raise NotADirectoryError(f"{project_qa} not found; is {requested} the right Unaligned folder?")
-        return [requested]
-
-    unaligned = sorted(p.name for p in run_path.iterdir() if p.is_dir() and p.name.startswith("Unaligned"))
-    if not unaligned:
-        raise FileNotFoundError(f"No Unaligned folder found in {run_path}")
-
-    with_project = [u for u in unaligned if (run_path / u / "QA" / f"Project_{project}").is_dir()]
-    skipped = sorted(set(unaligned) - set(with_project))
-    if skipped:
-        log.info("Skipping Unaligned folders without Project_%s: %s", project, ", ".join(skipped))
-    if not with_project:
-        raise FileNotFoundError(f"No Unaligned folder in {run_path} contains QA/Project_{project}")
-    log.info("Using Unaligned folders: %s", ", ".join(with_project))
-    return with_project
-
-
-def find_cells(run_path: Path, runinfo: dict, project: str, requested: Optional[str]) -> list[str]:
-    """
-    Return the PacBio cell folders listed for the project in runinfo.json.
-    If requested is given, return only that cell.
-    """
-    cells = MDG_Run_Parser.get_cells(runinfo, project)
-    if not cells:
-        raise ValueError(f"No cells listed for project {project} in {run_path}/PA_Logs/runinfo.json")
-    if requested:
-        if requested not in cells:
-            raise ValueError(f"Cell {requested} does not hold project {project} (cells: {', '.join(cells)})")
-        cells = [requested]
-    missing = [c for c in cells if not (run_path / c).is_dir()]
-    if missing:
-        raise NotADirectoryError(f"Cell folders listed in runinfo.json not found in {run_path}: {', '.join(missing)}")
-    log.info("Using cells: %s", ", ".join(cells))
-    return cells
 
 
 def read_analysis_list(list_file: Path) -> list[tuple[Path, str]]:
@@ -117,7 +63,7 @@ def read_analysis_list(list_file: Path) -> list[tuple[Path, str]]:
 
     entries: list[tuple[Path, str]] = []
     seen: dict[str, int] = {}
-    for line_no, raw in enumerate(list_file.read_text().splitlines(), start=1):
+    for line_no, raw in enumerate(list_file.read_text(encoding="utf-8").splitlines(), start=1):
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
@@ -185,30 +131,26 @@ def main(args: argparse.Namespace) -> None:
     if not run_path.is_dir():
         raise NotADirectoryError(run_path)
 
-    runinfo = MDG_Run_Parser.load_runinfo(str(run_path))
+    runinfo = MDG_Run_Parser.load_runinfo(run_path)
     check_project(runinfo, project)
 
-    sequencing_platform = runinfo["run"]["platform"]["value"]
-    if sequencing_platform not in SUPPORTED_PLATFORMS:
-        raise ValueError(f"Unsupported sequencing platform '{sequencing_platform}' for {run_path}")
+    platform_name = runinfo["run"]["platform"]["value"]
+    if platform_name not in PLATFORMS:
+        raise ValueError(f"Unsupported sequencing platform '{platform_name}' for {run_path}")
+    platform = PLATFORMS[platform_name]
 
     outdir = run_path / "PA_Logs" / "mdg-reports" / project
 
     # Unaligned folders (Illumina) or cells (PacBio); each gets its own {outdir}/{folder}_data
-    if sequencing_platform == "illumina":
-        if args.cell:
-            raise ValueError("--cell only applies to PacBio runs")
-        folders = find_unaligned_folders(run_path, project, args.unaligned)
-    else:
-        if args.unaligned:
-            raise ValueError("--unaligned only applies to Illumina runs")
-        folders = find_cells(run_path, runinfo, project, args.cell)
+    for other in PLATFORMS.values():
+        if other is not platform and getattr(args, other.folder_option):
+            raise ValueError(f"--{other.folder_option} only applies to {other.display_name} runs")
+    folders = platform.find_folders(run_path, runinfo, project, getattr(args, platform.folder_option))
 
-    search_dirs = [Path(MDG_Run_Parser.get_run_data_dir(str(outdir)))]
+    search_dirs = [MDG_Run_Parser.get_run_data_dir(outdir)]
     for folder in folders:
-        if sequencing_platform == "illumina":
-            search_dirs.append(run_path / folder / "QA" / f"Project_{project}")
-        search_dirs.append(Path(MDG_Run_Parser.get_data_dir(str(outdir), folder)))
+        search_dirs.extend(platform.module_search_dirs(run_path, project, folder))
+        search_dirs.append(MDG_Run_Parser.get_folder_data_dir(outdir, folder))
 
     # Analysis files are copied whenever --analysis is given (even with --noregen), and a
     # previously copied analysis_data folder is still included when --analysis is omitted
@@ -218,13 +160,14 @@ def main(args: argparse.Namespace) -> None:
     if analysis_dir.is_dir():
         search_dirs.append(analysis_dir)
 
+    config_file = MultiQC_Config_Generator.get_config_path(outdir, project)
     if not args.noregen:
         outdir.mkdir(parents=True, exist_ok=True)
-        MDG_Run_Parser.parse(str(run_path), project, sequencing_platform, folders, str(outdir))
-        MultiQC_Config_Generator.generate_config(str(run_path), project, sequencing_platform, folders, str(outdir))
+        MDG_Run_Parser.parse(run_path, project, platform_name, folders, outdir)
+        config_file = MultiQC_Config_Generator.generate_config(run_path, project, platform_name, folders, outdir)
 
     if not args.nomultiqc:
-        run_multiqc(search_dirs, outdir / f"multiqc_config_{project}.yaml", outdir, project)
+        run_multiqc(search_dirs, config_file, outdir, project)
 
 
 if __name__ == "__main__":
@@ -237,5 +180,7 @@ if __name__ == "__main__":
         if cli_args.debug:
             log.exception("Report generation failed")
         else:
-            log.error("Report generation failed: %s: %s (rerun with --debug for the full traceback)", type(e).__name__, e)
+            log.error(
+                "Report generation failed: %s: %s (rerun with --debug for the full traceback)", type(e).__name__, e
+            )
         sys.exit(1)
